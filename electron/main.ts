@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import nodemailer from "nodemailer";
+import { validateMailSettings } from "./mail";
 import { applyMigrations, createDatabase, initializeDatabase } from "./db.js";
 import {
   changePasswordWithOldPassword,
@@ -127,8 +128,6 @@ const normalizeRecoveryKey = (value: string): string =>
   value.trim().toUpperCase();
 
 const DEFAULT_SMTP_SETTINGS: Record<string, string> = {
-  smtp_user: "1402771411@qq.com",
-  smtp_pass: "rvxphtcestoxbaff",
   smtp_host: "smtp.qq.com",
   smtp_port: "465",
   smtp_secure: "true",
@@ -162,20 +161,53 @@ const getMailerConfig = (): {
   port: number;
   secure: boolean;
 } | { ok: false; message: string } => {
-  const user = getMailSetting("smtp_user");
-  const pass = getMailSetting("smtp_pass");
+  const user = getMailSetting("smtp_user") ?? "";
+  const pass = getMailSetting("smtp_pass") ?? "";
   const host = getMailSetting("smtp_host") ?? "smtp.qq.com";
   const portRaw = getMailSetting("smtp_port") ?? "465";
   const secureRaw = getMailSetting("smtp_secure") ?? "true";
-  const port = Number(portRaw);
-  const secure = secureRaw === "true";
-  if (!user || !pass) {
-    return { ok: false, message: "未配置发信邮箱或授权码" };
+  const result = validateMailSettings({
+    user,
+    pass,
+    host,
+    port: portRaw,
+    secure: secureRaw,
+  });
+  if (!result.ok) {
+    return { ok: false, message: result.message };
   }
-  if (!Number.isFinite(port)) {
-    return { ok: false, message: "发信端口配置不正确" };
-  }
-  return { ok: true, user, pass, host, port, secure };
+  return { ok: true, ...result.settings };
+};
+
+const writeAppSetting = (key: string, value: string): void => {
+  db.prepare(
+    `
+      INSERT INTO app_settings (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `,
+  ).run(key, value);
+};
+
+const getMailSettingsSnapshot = (): {
+  user: string;
+  pass: string;
+  host: string;
+  port: number;
+  secure: boolean;
+} => {
+  const user = getMailSetting("smtp_user") ?? "";
+  const pass = getMailSetting("smtp_pass") ?? "";
+  const host = getMailSetting("smtp_host") ?? "smtp.qq.com";
+  const portRaw = getMailSetting("smtp_port") ?? "465";
+  const secureRaw = getMailSetting("smtp_secure") ?? "true";
+  return {
+    user,
+    pass,
+    host,
+    port: Number(portRaw),
+    secure: secureRaw === "true",
+  };
 };
 
 const sendMail = async (
@@ -204,8 +236,9 @@ const sendMail = async (
       text,
     });
     return { success: true };
-  } catch {
-    return { success: false, message: "邮件发送失败" };
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : "邮件发送失败";
+    return { success: false, message: messageText };
   }
 };
 
@@ -624,6 +657,40 @@ ipcMain.handle("auth:reveal-recovery-key", (_, payload: AuthPayload) => {
 
 ipcMain.handle("app:get-version", () => {
   return { version: app.getVersion() };
+});
+
+ipcMain.handle("mail:get-settings", () => {
+  return { success: true, settings: getMailSettingsSnapshot() };
+});
+
+ipcMain.handle("mail:save-settings", (_, payload) => {
+  const result = validateMailSettings(payload ?? {});
+  if (!result.ok) {
+    return { success: false, message: result.message };
+  }
+  writeAppSetting("smtp_user", result.settings.user);
+  writeAppSetting("smtp_pass", result.settings.pass);
+  writeAppSetting("smtp_host", result.settings.host);
+  writeAppSetting("smtp_port", String(result.settings.port));
+  writeAppSetting("smtp_secure", result.settings.secure ? "true" : "false");
+  return { success: true, message: "邮件设置已保存" };
+});
+
+ipcMain.handle("mail:test", async (_, payload) => {
+  const to = normalizeInput(payload?.to ?? "");
+  const emailError = validateEmail(to);
+  if (emailError) {
+    return { success: false, message: emailError };
+  }
+  const result = await sendMail(
+    to,
+    "LX-WMS 测试邮件",
+    "这是一封来自 LX-WMS 的测试邮件。",
+  );
+  if (result.success) {
+    return { success: true, message: "测试邮件已发送" };
+  }
+  return result;
 });
 
 ipcMain.handle("update:check", async () => {

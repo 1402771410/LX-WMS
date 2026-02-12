@@ -99,6 +99,7 @@ const menuItems: MenuProps["items"] = [
     icon: <SettingOutlined />,
     children: [
       { key: "system:backup", label: "备份恢复" },
+      { key: "system:mail", label: "邮件设置" },
       { key: "system:update", label: "在线更新" },
     ],
   },
@@ -223,6 +224,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
       return hasPermission("inbound") || hasPermission("outbound");
     }
     if (key === "system:backup") return hasPermission("system:settings");
+    if (key === "system:mail") return hasPermission("system:settings");
     if (key === "system:update") return hasPermission("system:settings");
     return false;
   }, [hasAnyPermission, hasPermission]);

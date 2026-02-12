@@ -106,6 +106,14 @@ export type BackupRestorePayload = {
   database?: string;
 };
 
+export type MailSettingsPayload = {
+  user: string;
+  pass: string;
+  host: string;
+  port: number;
+  secure: boolean;
+};
+
 const api = {
   getInitState: (): Promise<InitState> =>
     ipcRenderer.invoke("app:get-init-state"),
@@ -165,6 +173,12 @@ const api = {
     ipcRenderer.invoke("backup:export", payload),
   restoreDatabase: (payload: BackupRestorePayload): Promise<ActionResult> =>
     ipcRenderer.invoke("backup:restore-db", payload),
+  getMailSettings: (): Promise<{ success: boolean; settings?: MailSettingsPayload; message?: string }> =>
+    ipcRenderer.invoke("mail:get-settings"),
+  saveMailSettings: (payload: MailSettingsPayload): Promise<ActionResult> =>
+    ipcRenderer.invoke("mail:save-settings", payload),
+  testMail: (payload: { to: string }): Promise<ActionResult> =>
+    ipcRenderer.invoke("mail:test", payload),
 };
 
 contextBridge.exposeInMainWorld("api", api);

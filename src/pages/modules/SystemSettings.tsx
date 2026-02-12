@@ -152,6 +152,15 @@ type UpdateCheckInfo = {
   releaseNotes?: string | string[] | Array<Record<string, unknown>>;
 };
 
+type MailSettingsValues = {
+  user: string;
+  pass: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  testTo?: string;
+};
+
 const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [messageApi, contextHolder] = message.useMessage();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -196,11 +205,15 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
+  const [mailLoading, setMailLoading] = useState(false);
+  const [mailSaving, setMailSaving] = useState(false);
+  const [mailTesting, setMailTesting] = useState(false);
   const [userForm] = Form.useForm<CreateUserValues>();
   const [userRoleForm] = Form.useForm<UpdateRoleValues>();
   const [userPasswordForm] = Form.useForm<ResetPasswordValues>();
   const [permissionForm] = Form.useForm<PermissionRuleValues>();
   const [backupForm] = Form.useForm<BackupSettings>();
+  const [mailForm] = Form.useForm<MailSettingsValues>();
   const [roleForm] = Form.useForm();
   const [oldPasswordForm] = Form.useForm<ChangePasswordWithOldValues>();
   const [recoveryResetForm] = Form.useForm<ChangePasswordWithRecoveryValues>();
@@ -435,6 +448,81 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     setDownloadingUpdate(false);
   }, [messageApi]);
 
+  const loadMailSettings = useCallback(async () => {
+    if (!window.api?.getMailSettings) {
+      messageApi.error("当前环境不支持邮件设置");
+      return;
+    }
+    setMailLoading(true);
+    const result = await window.api.getMailSettings();
+    if (result.success && result.settings) {
+      mailForm.setFieldsValue({
+        user: result.settings.user,
+        pass: result.settings.pass,
+        host: result.settings.host,
+        port: result.settings.port,
+        secure: result.settings.secure,
+      });
+    } else {
+      messageApi.error(result.message ?? "读取邮件设置失败");
+    }
+    setMailLoading(false);
+  }, [mailForm, messageApi]);
+
+  const handleSaveMailSettings = useCallback(async () => {
+    if (!window.api?.saveMailSettings) {
+      messageApi.error("当前环境不支持邮件设置");
+      return;
+    }
+    setMailSaving(true);
+    try {
+      const values = await mailForm.validateFields([
+        "user",
+        "pass",
+        "host",
+        "port",
+        "secure",
+      ]);
+      const result = await window.api.saveMailSettings({
+        user: values.user,
+        pass: values.pass,
+        host: values.host,
+        port: Number(values.port),
+        secure: Boolean(values.secure),
+      });
+      if (result.success) {
+        messageApi.success(result.message ?? "邮件设置已保存");
+      } else {
+        messageApi.error(result.message ?? "保存失败");
+      }
+    } catch {
+      messageApi.error("请检查邮件设置信息");
+    } finally {
+      setMailSaving(false);
+    }
+  }, [mailForm, messageApi]);
+
+  const handleTestMail = useCallback(async () => {
+    if (!window.api?.testMail) {
+      messageApi.error("当前环境不支持邮件设置");
+      return;
+    }
+    setMailTesting(true);
+    try {
+      const values = await mailForm.validateFields(["testTo"]);
+      const result = await window.api.testMail({ to: values.testTo.trim() });
+      if (result.success) {
+        messageApi.success(result.message ?? "测试邮件已发送");
+      } else {
+        messageApi.error(result.message ?? "测试邮件发送失败");
+      }
+    } catch {
+      messageApi.error("请输入测试收件邮箱");
+    } finally {
+      setMailTesting(false);
+    }
+  }, [mailForm, messageApi]);
+
   const updateNotes = useMemo(() => {
     if (!updateInfo?.releaseNotes) return [];
     const raw = updateInfo.releaseNotes;
@@ -471,6 +559,12 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
       handleCheckUpdates();
     }
   }, [handleCheckUpdates, loadCurrentVersion, viewKey]);
+
+  useEffect(() => {
+    if (viewKey === "mail") {
+      loadMailSettings();
+    }
+  }, [loadMailSettings, viewKey]);
 
   const handleAvatarChange = (info: { file: UploadFile; fileList: UploadFile[] }) => {
     setAvatarFiles(info.fileList.slice(-1));
@@ -1261,6 +1355,58 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
             pagination={{ pageSize: 8 }}
           />
         </div>
+      ) : viewKey === "mail" ? (
+        <Form form={mailForm} layout="vertical" style={{ maxWidth: 520 }}>
+          <Form.Item
+            name="user"
+            label="发件邮箱"
+            rules={[
+              { required: true, message: "请输入发件邮箱" },
+              { type: "email", message: "发件邮箱格式不正确" },
+            ]}
+          >
+            <Input placeholder="请输入发件邮箱" />
+          </Form.Item>
+          <Form.Item
+            name="pass"
+            label="SMTP 授权码"
+            rules={[{ required: true, message: "请输入邮箱授权码" }]}
+          >
+            <Input.Password placeholder="请输入邮箱授权码" />
+          </Form.Item>
+          <Form.Item
+            name="host"
+            label="SMTP 服务器"
+            rules={[{ required: true, message: "请输入 SMTP 服务器" }]}
+          >
+            <Input placeholder="例如：smtp.qq.com" />
+          </Form.Item>
+          <Form.Item
+            name="port"
+            label="SMTP 端口"
+            rules={[{ required: true, message: "请输入 SMTP 端口" }]}
+          >
+            <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="secure" label="SSL 加密" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            name="testTo"
+            label="测试收件邮箱"
+            rules={[{ type: "email", message: "邮箱格式不正确" }]}
+          >
+            <Input placeholder="用于测试发送，可选" />
+          </Form.Item>
+          <Space>
+            <Button type="primary" onClick={handleSaveMailSettings} loading={mailSaving}>
+              保存设置
+            </Button>
+            <Button onClick={handleTestMail} loading={mailTesting} disabled={mailLoading}>
+              发送测试邮件
+            </Button>
+          </Space>
+        </Form>
       ) : viewKey === "update" ? (
         <Space direction="vertical" style={{ width: "100%" }}>
           <Space>

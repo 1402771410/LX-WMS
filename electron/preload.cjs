@@ -34,6 +34,9 @@ const api = {
   deleteBackup: (payload) => ipcRenderer.invoke("backup:delete", payload),
   exportBackup: (payload) => ipcRenderer.invoke("backup:export", payload),
   restoreDatabase: (payload) => ipcRenderer.invoke("backup:restore-database", payload),
+  getMailSettings: () => ipcRenderer.invoke("mail:get-settings"),
+  saveMailSettings: (payload) => ipcRenderer.invoke("mail:save-settings", payload),
+  testMail: (payload) => ipcRenderer.invoke("mail:test", payload),
 };
 
 contextBridge.exposeInMainWorld("api", api);

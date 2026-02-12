@@ -98,6 +98,14 @@ export type BackupRestorePayload = {
   database?: string;
 };
 
+export type MailSettingsPayload = {
+  user: string;
+  pass: string;
+  host: string;
+  port: number;
+  secure: boolean;
+};
+
 export type ApiBridge = {
   getInitState: () => Promise<InitState>;
   getAppVersion: () => Promise<{ version: string }>;
@@ -132,6 +140,9 @@ export type ApiBridge = {
   deleteBackup: (payload: BackupReadPayload) => Promise<ActionResult>;
   exportBackup: (payload: BackupReadPayload) => Promise<ActionResult>;
   restoreDatabase: (payload: BackupRestorePayload) => Promise<ActionResult>;
+  getMailSettings: () => Promise<{ success: boolean; settings?: MailSettingsPayload; message?: string }>;
+  saveMailSettings: (payload: MailSettingsPayload) => Promise<ActionResult>;
+  testMail: (payload: { to: string }) => Promise<ActionResult>;
 };
 
 declare global {
