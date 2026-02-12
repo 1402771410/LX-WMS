@@ -11,6 +11,7 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import type { BaseRecord, InventoryItem, InboundOrder, OutboundOrder } from "../../utils/storage";
@@ -27,13 +28,18 @@ type AlertItem = {
   supplierLink: string;
 };
 
-const Dashboard = () => {
+type DashboardProps = {
+  onNavigate: (key: string) => void;
+};
+
+const Dashboard = ({ onNavigate }: DashboardProps) => {
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [currentSupplier, setCurrentSupplier] = useState<AlertItem | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(readInventoryItems());
   const [inboundOrders, setInboundOrders] = useState<InboundOrder[]>(readInboundOrders());
   const [outboundOrders, setOutboundOrders] = useState<OutboundOrder[]>(readOutboundOrders());
   const [supplierList, setSupplierList] = useState<BaseRecord[]>(readBaseList("supplier"));
+  const [messageApi, contextHolder] = message.useMessage();
 
   useEffect(() => {
     const sync = () => {
@@ -169,12 +175,12 @@ const Dashboard = () => {
   }, [inboundOrders, outboundOrders]);
 
   const quickActions = [
-    { key: "inbound", label: "新建入库单", tip: "请在左侧菜单进入“入库管理”进行操作。" },
-    { key: "outbound", label: "新建出库单", tip: "请在左侧菜单进入“出库管理”进行操作。" },
-    { key: "procurement", label: "发起采购", tip: "请在左侧菜单进入“商品采购”进行操作。" },
-    { key: "inventory", label: "库存查询", tip: "请在左侧菜单进入“库存总览”查看详情。" },
-    { key: "report", label: "导出报表", tip: "请在左侧菜单进入“报表管理”导出。" },
-    { key: "settings", label: "系统设置", tip: "请在左侧菜单进入“系统设置”进行配置。" },
+    { key: "inbound", label: "新建入库单", targetKey: "inventory:inbound" },
+    { key: "outbound", label: "新建出库单", targetKey: "inventory:outbound" },
+    { key: "procurement", label: "发起采购", targetKey: "procurement:purchase" },
+    { key: "inventory", label: "库存查询", targetKey: "inventory:list" },
+    { key: "report", label: "导出报表", targetKey: "reports:purchase" },
+    { key: "settings", label: "系统设置", targetKey: "system:backup" },
   ];
 
   const handleOpenSupplier = (record: AlertItem) => {
@@ -183,22 +189,21 @@ const Dashboard = () => {
   };
 
   const handlePurchase = (record: AlertItem) => {
-    if (!record.supplierLink || !/^https?:\/\//i.test(record.supplierLink)) {
+    const link = record.supplierLink?.trim();
+    if (!link || !/^https?:\/\//i.test(link)) {
+      messageApi.error("未配置有效的采购链接");
       return;
     }
-    window.open(record.supplierLink, "_blank");
+    window.open(link, "_blank", "noopener,noreferrer");
   };
 
-  const handleQuickAction = (label: string, tip: string) => {
-    Modal.info({
-      title: label,
-      content: tip,
-      okText: "知道了",
-    });
+  const handleQuickAction = (targetKey: string) => {
+    onNavigate(targetKey);
   };
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      {contextHolder}
       <div>
         <Typography.Title level={4}>运营概览</Typography.Title>
         <Row gutter={[16, 16]}>
@@ -280,7 +285,7 @@ const Dashboard = () => {
                 <Button
                   key={item.key}
                   type={index === 0 ? "primary" : "default"}
-                  onClick={() => handleQuickAction(item.label, item.tip)}
+                  onClick={() => handleQuickAction(item.targetKey)}
                 >
                   {item.label}
                 </Button>
@@ -363,7 +368,9 @@ const Dashboard = () => {
                 <Typography.Title level={5} style={{ margin: 0 }}>
                   库存预警列表
                 </Typography.Title>
-                <Button type="primary">新建采购请求</Button>
+                <Button type="primary" onClick={() => handleQuickAction("procurement:purchase")}>
+                  新建采购请求
+                </Button>
               </Space>
               <Table
                 rowKey="id"

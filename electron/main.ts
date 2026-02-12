@@ -198,7 +198,7 @@ const sendMail = async (
   });
   try {
     await transporter.sendMail({
-      from: config.user,
+      from: `LX-WMS <${config.user}>`,
       to,
       subject,
       text,

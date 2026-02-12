@@ -122,7 +122,7 @@ type PasswordValues = {
 
 const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps) => {
   const [activeKey, setActiveKey] = useState(defaultKey);
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState<string[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -366,6 +366,23 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
     }
   };
 
+  const handleNavigate = useCallback(
+    (key: string) => {
+      if (!canAccessKey(key)) {
+        messageApi.error("没有权限访问该功能");
+        return;
+      }
+      setActiveKey(key);
+      const [nextGroupKey] = key.split(":");
+      if (rootSubmenuKeys.includes(nextGroupKey)) {
+        setOpenKeys([nextGroupKey]);
+      } else {
+        setOpenKeys([]);
+      }
+    },
+    [canAccessKey, messageApi],
+  );
+
   const dropdownItems: MenuProps["items"] = [
     { key: "profile", label: "个人资料" },
     { key: "clear-cache", label: "清理缓存" },
@@ -380,7 +397,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
         </Card>
       );
     }
-    if (activeKey === "dashboard") return <Dashboard />;
+    if (activeKey === "dashboard") return <Dashboard onNavigate={handleNavigate} />;
     if (groupKey === "inventory") {
       if (childKey === "list") return <Inventory key={activeKey} activeKey="list" currentUser={currentUser} />;
       if (childKey === "inbound") return <Inbound key={activeKey} currentUser={currentUser} />;
@@ -410,8 +427,8 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
           currentUser={currentUser}
         />
       );
-    return <Dashboard />;
-  }, [activeKey, childKey, currentUser, groupKey, canAccessKey]);
+    return <Dashboard onNavigate={handleNavigate} />;
+  }, [activeKey, childKey, currentUser, groupKey, canAccessKey, handleNavigate]);
 
   return (
     <Layout className="main-layout">

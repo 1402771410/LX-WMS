@@ -528,6 +528,10 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   };
 
   const handleDeleteUser = (record: UserRow) => {
+    if (record.role === "ADMIN") {
+      messageApi.error("管理员账号不可删除");
+      return;
+    }
     if (!canDeleteUser) {
       messageApi.error("没有权限执行该操作");
       return;
@@ -812,7 +816,11 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
             >
               {record.status === "ACTIVE" ? "封禁" : "解封"}
             </Button>
-            <Button danger onClick={() => handleDeleteUser(record)} disabled={!canDeleteUser}>
+            <Button
+              danger
+              onClick={() => handleDeleteUser(record)}
+              disabled={!canDeleteUser || record.role === "ADMIN"}
+            >
               删除
             </Button>
           </Space>

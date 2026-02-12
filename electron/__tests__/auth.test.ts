@@ -6,6 +6,7 @@ import {
   confirmRecoveryKeyBinding,
   hasAdminUser,
   login,
+  removeUser,
   registerAdmin,
   markEmailCodeSent,
   resetPasswordByEmailCode,
@@ -50,6 +51,17 @@ describe("auth", () => {
     registerAdmin(db, "admin", "Admin1234", "admin@example.com");
     const loginResult = login(db, "admin", "Wrong1234");
     expect(loginResult.success).toBe(false);
+  });
+
+  it("rejects login for disabled account with explicit message", () => {
+    const db = setupDatabase();
+    registerAdmin(db, "admin", "Admin1234", "admin@example.com");
+    db.prepare("UPDATE users SET status = ? WHERE username = ?").run("DISABLED", "admin");
+    const loginResult = login(db, "admin", "Admin1234");
+    expect(loginResult.success).toBe(false);
+    if (!loginResult.success) {
+      expect(loginResult.message).toBe("账户已被禁用，请联系管理员");
+    }
   });
 
   it("binds recovery key and resets password", () => {
@@ -132,6 +144,16 @@ describe("auth", () => {
     expect(okResult.success).toBe(true);
     const badResult = validateRecoveryKey(db, "admin", "RK-INVALID");
     expect(badResult.success).toBe(false);
+  });
+
+  it("blocks deleting admin user", () => {
+    const db = setupDatabase();
+    const registerResult = registerAdmin(db, "admin", "Admin1234", "admin@example.com");
+    if (!registerResult.success) {
+      throw new Error("register failed");
+    }
+    const deleteResult = removeUser(db, registerResult.user.id);
+    expect(deleteResult.success).toBe(false);
   });
 
   it("enforces email code send interval", () => {

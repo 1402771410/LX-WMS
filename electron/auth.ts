@@ -427,8 +427,11 @@ export const login = (
         recoveryBoundAt?: string;
       }
     | undefined;
-  if (!row || row.status !== "ACTIVE") {
+  if (!row) {
     return { success: false, message: "用户名或密码错误" };
+  }
+  if (row.status !== "ACTIVE") {
+    return { success: false, message: "账户已被禁用，请联系管理员" };
   }
   if (!isPasswordMatch(password, row.passwordSalt, row.passwordHash)) {
     return { success: false, message: "用户名或密码错误" };
@@ -650,6 +653,15 @@ export const removeUser = (
   db: DatabaseInstance,
   userId: string,
 ): ActionResult => {
+  const row = db
+    .prepare("SELECT role FROM users WHERE id = ?")
+    .get(userId) as { role?: string } | undefined;
+  if (!row) {
+    return { success: false, message: "用户不存在" };
+  }
+  if (row.role === "ADMIN") {
+    return { success: false, message: "管理员账号不可删除" };
+  }
   db.prepare("DELETE FROM users WHERE id = ?").run(userId);
   return { success: true, message: "用户已删除" };
 };
