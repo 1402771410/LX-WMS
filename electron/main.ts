@@ -857,7 +857,6 @@ ipcMain.handle("update:download", async () => {
       return { success: false, message: "暂无可用更新" };
     }
     const updater = (await import("electron-updater")).default.autoUpdater;
-    updater.autoDownload = true;
     await updater.downloadUpdate();
     return { success: true, message: "已开始下载更新" };
   } catch {

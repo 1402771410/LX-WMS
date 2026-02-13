@@ -226,6 +226,17 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [downloadProgress, setDownloadProgress] = useState<UpdateDownloadProgress | null>(null);
   const [downloadedUpdate, setDownloadedUpdate] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadRetryCount, setDownloadRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (downloadRetryCount > 0 && downloadRetryCount <= 2) {
+      const timer = setTimeout(() => {
+        window.api?.downloadUpdate();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [downloadRetryCount]);
+
   const [mailLoading, setMailLoading] = useState(false);
   const [mailSaving, setMailSaving] = useState(false);
   const [mailTesting, setMailTesting] = useState(false);
@@ -483,6 +494,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     setDownloadedUpdate(false);
     setDownloadError(null);
     setDownloadProgress(null);
+    setDownloadRetryCount(0);
     const result = await window.api.downloadUpdate();
     if (result.success) {
       messageApi.success(result.message ?? "已开始下载更新");
@@ -734,8 +746,13 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
       setDownloadedUpdate(true);
     });
     const offError = window.api.onUpdateError((payload) => {
-      setDownloadingUpdate(false);
-      setDownloadError(payload.message ?? "下载失败");
+      setDownloadRetryCount((prev) => {
+        if (prev >= 2) {
+          setDownloadingUpdate(false);
+          setDownloadError(payload.message ?? "下载失败");
+        }
+        return prev + 1;
+      });
     });
     const offAvailable = window.api.onUpdateAvailable
       ? window.api.onUpdateAvailable((payload) => {
