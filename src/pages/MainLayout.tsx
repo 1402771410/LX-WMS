@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Avatar,
+  Badge,
   Button,
   Card,
   Dropdown,
@@ -36,7 +37,12 @@ import SystemSettings from "./modules/SystemSettings";
 import Procurement from "./modules/Procurement.tsx";
 import Inbound from "./modules/Inbound";
 import logo from "../assets/logo.png";
-import { buildPermissionChecker, onStoreChange, readPermissionRules } from "../utils/storage";
+import {
+  buildPermissionChecker,
+  onStoreChange,
+  readPermissionRules,
+  readUpdateStatus,
+} from "../utils/storage";
 const { Sider, Content, Header } = Layout;
 
 type MainLayoutProps = {
@@ -44,66 +50,6 @@ type MainLayoutProps = {
   onLogout: () => void;
   onUpdateProfile: (nextUser: UserInfo) => void;
 };
-
-const menuItems: MenuProps["items"] = [
-  { key: "dashboard", label: "仪表盘", icon: <AppstoreOutlined /> },
-  {
-    key: "inventory",
-    label: "库存管理",
-    icon: <DatabaseOutlined />,
-    children: [
-      { key: "inventory:list", label: "库存列表" },
-      { key: "inventory:inbound", label: "入库管理" },
-      { key: "inventory:outbound", label: "出库管理" },
-      { key: "inventory:category", label: "库存类别" },
-      { key: "inventory:location", label: "库位管理" },
-      { key: "inventory:warehouse", label: "仓库管理" },
-      { key: "inventory:supplier", label: "供应商" },
-      { key: "inventory:project", label: "项目管理" },
-    ],
-  },
-  {
-    key: "procurement",
-    label: "采购管理",
-    icon: <ShoppingCartOutlined />,
-    children: [
-      { key: "procurement:finance", label: "财务管理" },
-      { key: "procurement:purchase", label: "商品采购" },
-      { key: "procurement:code", label: "编号规则" },
-    ],
-  },
-  {
-    key: "user",
-    label: "用户管理",
-    icon: <TeamOutlined />,
-    children: [
-      { key: "user:list", label: "用户列表" },
-      { key: "user:permission", label: "用户权限" },
-    ],
-  },
-  {
-    key: "reports",
-    label: "报表管理",
-    icon: <BarChartOutlined />,
-    children: [
-      { key: "reports:purchase", label: "采购报表" },
-      { key: "reports:outbound", label: "出库报表" },
-      { key: "reports:inbound", label: "入库报表" },
-      { key: "reports:project", label: "项目消耗" },
-      { key: "reports:aging", label: "库龄报表" },
-    ],
-  },
-  {
-    key: "system",
-    label: "系统设置",
-    icon: <SettingOutlined />,
-    children: [
-      { key: "system:backup", label: "备份恢复" },
-      { key: "system:mail", label: "邮件设置" },
-      { key: "system:update", label: "在线更新" },
-    ],
-  },
-];
 
 const defaultKey = "dashboard";
 const rootSubmenuKeys = ["inventory", "procurement", "user", "reports", "system"];
@@ -140,6 +86,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   const [mailConfigured, setMailConfigured] = useState(true);
   const [adminEmailVerified, setAdminEmailVerified] = useState(true);
   const [adminEmail, setAdminEmail] = useState("");
+  const [updateAvailable, setUpdateAvailable] = useState(readUpdateStatus().available);
 
   const [groupKey, childKey] = activeKey.split(":");
 
@@ -180,6 +127,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   useEffect(() => {
     const sync = () => {
       setPermissionRules(readPermissionRules());
+      setUpdateAvailable(readUpdateStatus().available);
     };
     sync();
     return onStoreChange(sync);
@@ -192,6 +140,76 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   const { hasPermission } = useMemo(
     () => buildPermissionChecker(currentUser?.role, permissionRules),
     [currentUser?.role, permissionRules],
+  );
+
+  const menuItems: MenuProps["items"] = useMemo(
+    () => [
+      { key: "dashboard", label: "仪表盘", icon: <AppstoreOutlined /> },
+      {
+        key: "inventory",
+        label: "库存管理",
+        icon: <DatabaseOutlined />,
+        children: [
+          { key: "inventory:list", label: "库存列表" },
+          { key: "inventory:inbound", label: "入库管理" },
+          { key: "inventory:outbound", label: "出库管理" },
+          { key: "inventory:category", label: "库存类别" },
+          { key: "inventory:location", label: "库位管理" },
+          { key: "inventory:warehouse", label: "仓库管理" },
+          { key: "inventory:supplier", label: "供应商" },
+          { key: "inventory:project", label: "项目管理" },
+        ],
+      },
+      {
+        key: "procurement",
+        label: "采购管理",
+        icon: <ShoppingCartOutlined />,
+        children: [
+          { key: "procurement:finance", label: "财务管理" },
+          { key: "procurement:purchase", label: "商品采购" },
+          { key: "procurement:code", label: "编号规则" },
+        ],
+      },
+      {
+        key: "user",
+        label: "用户管理",
+        icon: <TeamOutlined />,
+        children: [
+          { key: "user:list", label: "用户列表" },
+          { key: "user:permission", label: "用户权限" },
+        ],
+      },
+      {
+        key: "reports",
+        label: "报表管理",
+        icon: <BarChartOutlined />,
+        children: [
+          { key: "reports:purchase", label: "采购报表" },
+          { key: "reports:outbound", label: "出库报表" },
+          { key: "reports:inbound", label: "入库报表" },
+          { key: "reports:project", label: "项目消耗" },
+          { key: "reports:aging", label: "库龄报表" },
+        ],
+      },
+      {
+        key: "system",
+        label: "系统设置",
+        icon: <SettingOutlined />,
+        children: [
+          { key: "system:backup", label: "备份恢复" },
+          { key: "system:mail", label: "邮件设置" },
+          {
+            key: "system:update",
+            label: (
+              <Badge dot={updateAvailable} offset={[6, 0]}>
+                在线更新
+              </Badge>
+            ),
+          },
+        ],
+      },
+    ],
+    [updateAvailable],
   );
   const hasAnyPermission = useCallback(
     (permissions: string[]) =>
@@ -288,7 +306,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
         })
         .filter(Boolean) as MenuProps["items"];
     return filterItems(menuItems);
-  }, [canAccessKey]);
+  }, [canAccessKey, menuItems]);
 
   const allowedKeys = useMemo(() => {
     const keys: string[] = [];

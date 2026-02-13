@@ -837,6 +837,16 @@ ipcMain.handle("update:download", async () => {
   }
 });
 
+ipcMain.handle("update:install", async () => {
+  try {
+    const updater = (await import("electron-updater")).default.autoUpdater;
+    updater.quitAndInstall();
+    return { success: true, message: "正在重启安装" };
+  } catch {
+    return { success: false, message: "安装失败" };
+  }
+});
+
 ipcMain.handle("backup:list", () => {
   return { success: true, items: listBackupFiles() };
 });

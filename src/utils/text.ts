@@ -1,6 +1,5 @@
 export const sanitizeReleaseNote = (value: string): string => {
-  const withoutTags = value.replace(/<[^>]*>/g, " ");
-  const decoded = withoutTags
+  const decoded = value
     .replace(/&nbsp;/gi, " ")
     .replace(/&#160;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -8,5 +7,6 @@ export const sanitizeReleaseNote = (value: string): string => {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'");
-  return decoded.replace(/\s+/g, " ").trim();
+  const withoutTags = decoded.replace(/<[^>]*>/g, " ");
+  return withoutTags.replace(/\s+/g, " ").trim();
 };

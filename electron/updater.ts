@@ -1,4 +1,4 @@
-import { dialog, BrowserWindow } from "electron";
+import { BrowserWindow } from "electron";
 import updater from "electron-updater";
 import type { UpdateCheckResult } from "electron-updater";
 
@@ -15,32 +15,30 @@ export const setupAutoUpdater = (mainWindow: BrowserWindow): void => {
   applyUpdateFeed();
   autoUpdater.autoDownload = false;
 
-  autoUpdater.on("update-available", async (info) => {
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "发现新版本",
-      message: `检测到新版本 ${info.version}，是否立即下载更新？`,
-      buttons: ["立即下载", "稍后"],
-      defaultId: 0,
-      cancelId: 1,
+  autoUpdater.on("update-available", (info) => {
+    mainWindow.webContents.send("update:available", {
+      version: info.version,
+      releaseName: info.releaseName,
+      releaseNotes: info.releaseNotes,
     });
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
-    }
   });
 
-  autoUpdater.on("update-downloaded", async () => {
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: "info",
-      title: "更新就绪",
-      message: "更新已下载完成，是否立即重启并安装？",
-      buttons: ["立即重启", "稍后"],
-      defaultId: 0,
-      cancelId: 1,
+  autoUpdater.on("download-progress", (progress) => {
+    mainWindow.webContents.send("update:download-progress", {
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
     });
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall();
-    }
+  });
+
+  autoUpdater.on("update-downloaded", () => {
+    mainWindow.webContents.send("update:downloaded");
+  });
+
+  autoUpdater.on("error", (error) => {
+    const message = error instanceof Error ? error.message : "下载失败";
+    mainWindow.webContents.send("update:error", { message });
   });
 };
 

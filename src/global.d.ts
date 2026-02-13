@@ -123,6 +123,19 @@ export type MailSettingsPayload = {
   secure: boolean;
 };
 
+export type UpdateAvailablePayload = {
+  version?: string;
+  releaseName?: string;
+  releaseNotes?: string | string[] | Array<Record<string, unknown>>;
+};
+
+export type UpdateProgressPayload = {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+};
+
 export type ApiBridge = {
   getInitState: () => Promise<InitState>;
   getAppVersion: () => Promise<{ version: string }>;
@@ -164,6 +177,11 @@ export type ApiBridge = {
     releaseNotes?: string | string[];
   }>;
   downloadUpdate: () => Promise<ActionResult>;
+  installUpdate: () => Promise<ActionResult>;
+  onUpdateAvailable: (handler: (payload: UpdateAvailablePayload) => void) => () => void;
+  onUpdateProgress: (handler: (payload: UpdateProgressPayload) => void) => () => void;
+  onUpdateDownloaded: (handler: () => void) => () => void;
+  onUpdateError: (handler: (payload: { message: string }) => void) => () => void;
   listBackups: () => Promise<{ success: boolean; items?: unknown; message?: string }>;
   createBackup: (payload: BackupCreatePayload) => Promise<{ success: boolean; item?: unknown; message?: string }>;
   readBackup: (payload: BackupReadPayload) => Promise<{ success: boolean; backup?: unknown; message?: string }>;

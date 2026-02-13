@@ -9,6 +9,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Progress,
   Row,
   Select,
   Space,
@@ -33,6 +34,7 @@ import {
   writeBackupSettings,
   writePermissionRules,
   writeRoleGroups,
+  writeUpdateStatus,
 } from "../../utils/storage";
 
 type UserRow = {
@@ -156,6 +158,13 @@ type UpdateCheckInfo = {
   releaseNotes?: string | string[] | Array<Record<string, unknown>>;
 };
 
+type UpdateDownloadProgress = {
+  percent?: number;
+  transferred?: number;
+  total?: number;
+  bytesPerSecond?: number;
+};
+
 type MailSettingsValues = {
   user: string;
   pass: string;
@@ -214,6 +223,9 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<UpdateDownloadProgress | null>(null);
+  const [downloadedUpdate, setDownloadedUpdate] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [mailLoading, setMailLoading] = useState(false);
   const [mailSaving, setMailSaving] = useState(false);
   const [mailTesting, setMailTesting] = useState(false);
@@ -448,9 +460,15 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     const result = await window.api.checkForUpdates();
     if (result.available) {
       setUpdateInfo(result as UpdateCheckInfo);
+      writeUpdateStatus({
+        available: true,
+        version: result.version,
+        checkedAt: new Date().toISOString(),
+      });
       messageApi.success("检测到可用更新");
     } else {
       setUpdateInfo({ available: false });
+      writeUpdateStatus({ available: false, checkedAt: new Date().toISOString() });
       messageApi.info("当前已是最新版本");
     }
     setCheckingUpdate(false);
@@ -462,13 +480,29 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
       return;
     }
     setDownloadingUpdate(true);
+    setDownloadedUpdate(false);
+    setDownloadError(null);
+    setDownloadProgress(null);
     const result = await window.api.downloadUpdate();
     if (result.success) {
       messageApi.success(result.message ?? "已开始下载更新");
     } else {
-      messageApi.error(result.message ?? "更新失败");
+      const message = result.message ?? "更新失败";
+      setDownloadError(message);
+      messageApi.error(message);
     }
     setDownloadingUpdate(false);
+  }, [messageApi]);
+
+  const handleInstallUpdate = useCallback(async () => {
+    if (!window.api?.installUpdate) {
+      messageApi.error("当前环境不支持自动安装");
+      return;
+    }
+    const result = await window.api.installUpdate();
+    if (!result.success) {
+      messageApi.error(result.message ?? "安装失败");
+    }
   }, [messageApi]);
 
   const loadAdminEmailStatus = useCallback(async () => {
@@ -685,6 +719,42 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     [messageApi],
   );
 
+  useEffect(() => {
+    if (!window.api?.onUpdateProgress || !window.api?.onUpdateDownloaded || !window.api?.onUpdateError) {
+      return;
+    }
+    const offProgress = window.api.onUpdateProgress((payload) => {
+      setDownloadingUpdate(true);
+      setDownloadProgress(payload);
+      setDownloadError(null);
+      setDownloadedUpdate(false);
+    });
+    const offDownloaded = window.api.onUpdateDownloaded(() => {
+      setDownloadingUpdate(false);
+      setDownloadedUpdate(true);
+    });
+    const offError = window.api.onUpdateError((payload) => {
+      setDownloadingUpdate(false);
+      setDownloadError(payload.message ?? "下载失败");
+    });
+    const offAvailable = window.api.onUpdateAvailable
+      ? window.api.onUpdateAvailable((payload) => {
+          setUpdateInfo({ available: true, ...payload });
+          writeUpdateStatus({
+            available: true,
+            version: payload.version,
+            checkedAt: new Date().toISOString(),
+          });
+        })
+      : undefined;
+    return () => {
+      offProgress();
+      offDownloaded();
+      offError();
+      offAvailable?.();
+    };
+  }, []);
+
   const updateNotes = useMemo(() => {
     if (!updateInfo?.releaseNotes) return [];
     const raw = updateInfo.releaseNotes;
@@ -714,6 +784,27 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     }
     return [];
   }, [updateInfo]);
+
+  const manualDownloadUrl = useMemo(() => {
+    const version = updateInfo?.version?.trim();
+    if (version) {
+      return `https://mirror.ghproxy.com/https://github.com/1402771410/LX-WMS/releases/latest/download/LX-WMS-Setup-${version}.exe`;
+    }
+    return "https://github.com/1402771410/LX-WMS/releases/latest";
+  }, [updateInfo?.version]);
+
+  const formatBytes = useCallback((value?: number) => {
+    if (!value || value <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    let size = value;
+    let index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    const fixed = size >= 100 ? 0 : size >= 10 ? 1 : 2;
+    return `${size.toFixed(fixed)} ${units[index]}`;
+  }, []);
 
   useEffect(() => {
     if (viewKey === "update") {
@@ -1681,12 +1772,44 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
             </Button>
             <Button
               onClick={handleDownloadUpdate}
-              disabled={!updateInfo?.available}
+              disabled={!updateInfo?.available || downloadedUpdate}
               loading={downloadingUpdate}
             >
               立即更新
             </Button>
+            {downloadedUpdate ? (
+              <Button type="primary" onClick={handleInstallUpdate}>
+                立即重启安装
+              </Button>
+            ) : null}
           </Space>
+          {downloadProgress ? (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Typography.Text>
+                下载进度：{Math.round(downloadProgress.percent ?? 0)}%
+              </Typography.Text>
+              <Progress percent={Math.round(downloadProgress.percent ?? 0)} />
+              <Typography.Text type="secondary">
+                已下载：{formatBytes(downloadProgress.transferred)} / {formatBytes(downloadProgress.total)}
+                ，速度：{formatBytes(downloadProgress.bytesPerSecond)}/s
+              </Typography.Text>
+            </Space>
+          ) : null}
+          {downloadedUpdate ? (
+            <Typography.Text type="success">更新包已下载完成，请点击立即重启安装</Typography.Text>
+          ) : null}
+          {downloadError ? (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Typography.Text type="danger">下载失败：{downloadError}</Typography.Text>
+              <Typography.Text>手动更新教程：</Typography.Text>
+              <Typography.Text>1. 点击下方下载地址获取最新安装包</Typography.Text>
+              <Typography.Text>2. 关闭当前应用后双击安装包完成升级</Typography.Text>
+              <Typography.Text>下载地址：{manualDownloadUrl}</Typography.Text>
+              <Button type="link" onClick={() => handleOpenGuide(manualDownloadUrl)}>
+                打开下载地址
+              </Button>
+            </Space>
+          ) : null}
           {updateInfo?.available ? (
             <Space direction="vertical" style={{ width: "100%" }}>
               <Typography.Text>

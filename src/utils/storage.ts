@@ -17,6 +17,7 @@ const NS_PROC = "lx-wms.procurement";
 const NS_PERMISSION = "lx-wms.permission";
 const NS_ROLE = "lx-wms.role";
 const NS_BACKUP = "lx-wms.backup";
+const NS_UPDATE = "lx-wms.update";
 const STORE_EVENT = "lx-wms.storage";
 
 const notifyChange = () => {
@@ -29,6 +30,35 @@ export const onStoreChange = (handler: () => void) => {
   if (typeof window === "undefined") return () => undefined;
   window.addEventListener(STORE_EVENT, handler);
   return () => window.removeEventListener(STORE_EVENT, handler);
+};
+
+export type UpdateStatus = {
+  available: boolean;
+  version?: string;
+  checkedAt?: string;
+};
+
+export const readUpdateStatus = (): UpdateStatus => {
+  try {
+    const raw = localStorage.getItem(NS_UPDATE);
+    if (!raw) return { available: false };
+    const parsed = JSON.parse(raw) as UpdateStatus;
+    if (!parsed || typeof parsed.available !== "boolean") {
+      return { available: false };
+    }
+    return parsed;
+  } catch {
+    return { available: false };
+  }
+};
+
+export const writeUpdateStatus = (value: UpdateStatus) => {
+  try {
+    localStorage.setItem(NS_UPDATE, JSON.stringify(value));
+    notifyChange();
+  } catch {
+    return;
+  }
 };
 
 const getBaseKey = (key: BaseKey) => `${NS_BASE}.${key}`;

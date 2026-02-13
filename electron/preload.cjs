@@ -34,6 +34,27 @@ const api = {
   deleteUser: (payload) => ipcRenderer.invoke("user:delete", payload),
   checkForUpdates: () => ipcRenderer.invoke("update:check"),
   downloadUpdate: () => ipcRenderer.invoke("update:download"),
+  installUpdate: () => ipcRenderer.invoke("update:install"),
+  onUpdateAvailable: (handler) => {
+    const listener = (_, payload) => handler(payload);
+    ipcRenderer.on("update:available", listener);
+    return () => ipcRenderer.removeListener("update:available", listener);
+  },
+  onUpdateProgress: (handler) => {
+    const listener = (_, payload) => handler(payload);
+    ipcRenderer.on("update:download-progress", listener);
+    return () => ipcRenderer.removeListener("update:download-progress", listener);
+  },
+  onUpdateDownloaded: (handler) => {
+    const listener = () => handler();
+    ipcRenderer.on("update:downloaded", listener);
+    return () => ipcRenderer.removeListener("update:downloaded", listener);
+  },
+  onUpdateError: (handler) => {
+    const listener = (_, payload) => handler(payload);
+    ipcRenderer.on("update:error", listener);
+    return () => ipcRenderer.removeListener("update:error", listener);
+  },
   listBackups: () => ipcRenderer.invoke("backup:list"),
   createBackup: (payload) => ipcRenderer.invoke("backup:create", payload),
   readBackup: (payload) => ipcRenderer.invoke("backup:read", payload),

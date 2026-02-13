@@ -131,6 +131,19 @@ export type MailSettingsPayload = {
   secure: boolean;
 };
 
+export type UpdateAvailablePayload = {
+  version?: string;
+  releaseName?: string;
+  releaseNotes?: string | string[] | Array<Record<string, unknown>>;
+};
+
+export type UpdateProgressPayload = {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+};
+
 const api = {
   getInitState: (): Promise<InitState> =>
     ipcRenderer.invoke("app:get-init-state"),
@@ -191,6 +204,28 @@ const api = {
   }> => ipcRenderer.invoke("update:check"),
   downloadUpdate: (): Promise<ActionResult> =>
     ipcRenderer.invoke("update:download"),
+  installUpdate: (): Promise<ActionResult> =>
+    ipcRenderer.invoke("update:install"),
+  onUpdateAvailable: (handler: (payload: UpdateAvailablePayload) => void) => {
+    const listener = (_: unknown, payload: UpdateAvailablePayload) => handler(payload);
+    ipcRenderer.on("update:available", listener);
+    return () => ipcRenderer.removeListener("update:available", listener);
+  },
+  onUpdateProgress: (handler: (payload: UpdateProgressPayload) => void) => {
+    const listener = (_: unknown, payload: UpdateProgressPayload) => handler(payload);
+    ipcRenderer.on("update:download-progress", listener);
+    return () => ipcRenderer.removeListener("update:download-progress", listener);
+  },
+  onUpdateDownloaded: (handler: () => void) => {
+    const listener = () => handler();
+    ipcRenderer.on("update:downloaded", listener);
+    return () => ipcRenderer.removeListener("update:downloaded", listener);
+  },
+  onUpdateError: (handler: (payload: { message: string }) => void) => {
+    const listener = (_: unknown, payload: { message: string }) => handler(payload);
+    ipcRenderer.on("update:error", listener);
+    return () => ipcRenderer.removeListener("update:error", listener);
+  },
   listBackups: (): Promise<{ success: boolean; items?: unknown; message?: string }> =>
     ipcRenderer.invoke("backup:list"),
   createBackup: (payload: BackupCreatePayload): Promise<{ success: boolean; item?: unknown; message?: string }> =>
