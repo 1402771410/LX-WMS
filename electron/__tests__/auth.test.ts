@@ -12,7 +12,10 @@ import {
   resetPasswordByEmailCode,
   resetPasswordByRecoveryKey,
   saveEmailCode,
+  updateUserRole,
+  updateUserStatus,
   validateRecoveryKey,
+  verifyEmailCode,
   verifyEmailCodeSendInterval,
   revealRecoveryKey,
 } from "../auth";
@@ -168,6 +171,49 @@ describe("auth", () => {
     markEmailCodeSent(db, "password_reset", "admin", past);
     const allowed = verifyEmailCodeSendInterval(db, "password_reset", "admin");
     expect(allowed.success).toBe(true);
+  });
+
+  it("verifies admin email bind code", () => {
+    const db = setupDatabase();
+    const code = "123456";
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    saveEmailCode(db, "admin_email_bind", "admin", "admin@example.com", code, expiresAt);
+    const mismatch = verifyEmailCode(
+      db,
+      "admin_email_bind",
+      "admin",
+      "other@example.com",
+      code,
+    );
+    expect(mismatch.success).toBe(false);
+    const okResult = verifyEmailCode(
+      db,
+      "admin_email_bind",
+      "admin",
+      "admin@example.com",
+      code,
+    );
+    expect(okResult.success).toBe(true);
+  });
+
+  it("blocks admin role change", () => {
+    const db = setupDatabase();
+    const registerResult = registerAdmin(db, "admin", "Admin1234", "admin@example.com");
+    if (!registerResult.success) {
+      throw new Error("register failed");
+    }
+    const updateResult = updateUserRole(db, registerResult.user.id, "USER");
+    expect(updateResult.success).toBe(false);
+  });
+
+  it("blocks admin status change", () => {
+    const db = setupDatabase();
+    const registerResult = registerAdmin(db, "admin", "Admin1234", "admin@example.com");
+    if (!registerResult.success) {
+      throw new Error("register failed");
+    }
+    const updateResult = updateUserStatus(db, registerResult.user.id, "DISABLED");
+    expect(updateResult.success).toBe(false);
   });
 
   it("resets password with email code", () => {

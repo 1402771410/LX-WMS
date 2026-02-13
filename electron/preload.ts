@@ -12,8 +12,8 @@ export type AuthPayload = {
 export type RegisterAdminPayload = {
   username: string;
   password: string;
-  email: string;
-  emailCode: string;
+  email?: string;
+  emailCode?: string;
 };
 
 export type AuthResult =
@@ -57,6 +57,23 @@ export type ResetByEmailPayload = {
 export type EmailCodePayload = {
   username: string;
   email: string;
+};
+
+export type ExternalLinkPayload = {
+  url: string;
+};
+
+export type AdminEmailPayload = {
+  userId: string;
+  username: string;
+  email: string;
+};
+
+export type AdminEmailVerifyPayload = {
+  userId: string;
+  username: string;
+  email: string;
+  emailCode: string;
 };
 
 export type ChangePasswordPayload = {
@@ -119,10 +136,23 @@ const api = {
     ipcRenderer.invoke("app:get-init-state"),
   getAppVersion: (): Promise<{ version: string }> =>
     ipcRenderer.invoke("app:get-version"),
+  openExternal: (payload: ExternalLinkPayload): Promise<ActionResult> =>
+    ipcRenderer.invoke("app:open-external", payload),
   registerAdmin: (payload: RegisterAdminPayload): Promise<RegisterAdminResult> =>
     ipcRenderer.invoke("auth:register-admin", payload),
   sendAdminEmailCode: (payload: EmailCodePayload): Promise<ActionResult> =>
     ipcRenderer.invoke("auth:send-admin-email-code", payload),
+  getAdminEmailStatus: (payload: { userId: string; username: string }): Promise<{
+    success: boolean;
+    email?: string;
+    verified?: boolean;
+    mailConfigured?: boolean;
+    message?: string;
+  }> => ipcRenderer.invoke("admin:get-email-status", payload),
+  sendAdminBindEmailCode: (payload: AdminEmailPayload): Promise<ActionResult> =>
+    ipcRenderer.invoke("admin:send-bind-email-code", payload),
+  bindAdminEmail: (payload: AdminEmailVerifyPayload): Promise<ActionResult> =>
+    ipcRenderer.invoke("admin:bind-email", payload),
   login: (payload: AuthPayload): Promise<AuthResult> =>
     ipcRenderer.invoke("auth:login", payload),
   confirmRecoveryKey: (payload: RecoveryConfirmPayload): Promise<ActionResult> =>
@@ -175,6 +205,8 @@ const api = {
     ipcRenderer.invoke("backup:restore-db", payload),
   getMailSettings: (): Promise<{ success: boolean; settings?: MailSettingsPayload; message?: string }> =>
     ipcRenderer.invoke("mail:get-settings"),
+  getMailStatus: (): Promise<{ success: boolean; configured?: boolean; message?: string }> =>
+    ipcRenderer.invoke("mail:get-status"),
   saveMailSettings: (payload: MailSettingsPayload): Promise<ActionResult> =>
     ipcRenderer.invoke("mail:save-settings", payload),
   testMail: (payload: { to: string }): Promise<ActionResult> =>

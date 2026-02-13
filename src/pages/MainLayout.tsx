@@ -134,10 +134,47 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   const [passwordForm] = Form.useForm<PasswordValues>();
   const avatarUrl = Form.useWatch("avatarUrl", profileForm);
   const displayAvatar = avatarUrl || currentUser?.avatarUrl;
+  const [complianceOpen, setComplianceOpen] = useState(false);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [mailConfigured, setMailConfigured] = useState(true);
+  const [adminEmailVerified, setAdminEmailVerified] = useState(true);
+  const [adminEmail, setAdminEmail] = useState("");
 
   const [groupKey, childKey] = activeKey.split(":");
 
   const displayName = currentUser?.displayName || currentUser?.username || "用户";
+
+  const refreshCompliance = useCallback(async () => {
+    if (!currentUser || currentUser.role !== "ADMIN") {
+      setComplianceOpen(false);
+      return;
+    }
+    if (!window.api?.getMailStatus || !window.api?.getAdminEmailStatus) {
+      setComplianceOpen(false);
+      return;
+    }
+    setComplianceLoading(true);
+    try {
+      const mailResult = await window.api.getMailStatus();
+      const adminResult = await window.api.getAdminEmailStatus({
+        userId: currentUser.id,
+        username: currentUser.username,
+      });
+      const nextMailConfigured = mailResult.success ? Boolean(mailResult.configured) : true;
+      const nextAdminVerified = adminResult.success ? Boolean(adminResult.verified) : true;
+      setMailConfigured(nextMailConfigured);
+      setAdminEmailVerified(nextAdminVerified);
+      setAdminEmail(adminResult.success ? adminResult.email ?? "" : "");
+      setComplianceOpen(
+        activeKey !== "system:mail" && (!nextMailConfigured || !nextAdminVerified),
+      );
+    } catch {
+      messageApi.error("读取邮箱配置状态失败");
+      setComplianceOpen(false);
+    } finally {
+      setComplianceLoading(false);
+    }
+  }, [activeKey, currentUser, messageApi]);
 
   useEffect(() => {
     const sync = () => {
@@ -146,6 +183,10 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
     sync();
     return onStoreChange(sync);
   }, []);
+
+  useEffect(() => {
+    void refreshCompliance();
+  }, [refreshCompliance]);
 
   const { hasPermission } = useMemo(
     () => buildPermissionChecker(currentUser?.role, permissionRules),
@@ -513,6 +554,40 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
         </Header>
         <Content className="main-content">{contentNode}</Content>
       </Layout>
+      <Modal
+        title="请先完成管理员邮箱配置"
+        open={complianceOpen}
+        closable={false}
+        maskClosable={false}
+        footer={
+          <Button
+            type="primary"
+            loading={complianceLoading}
+            onClick={() => {
+              if (!canAccessKey("system:mail")) {
+                messageApi.error("没有权限访问邮件设置");
+                return;
+              }
+              setComplianceOpen(false);
+              handleNavigate("system:mail");
+            }}
+          >
+            去设置
+          </Button>
+        }
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          {!mailConfigured ? (
+            <Typography.Text>请先完成邮件设置，否则无法验证管理员邮箱。</Typography.Text>
+          ) : null}
+          {mailConfigured && !adminEmailVerified ? (
+            <Typography.Text>
+              请在邮件设置中绑定并验证管理员邮箱。
+              {adminEmail ? `当前邮箱：${adminEmail}` : ""}
+            </Typography.Text>
+          ) : null}
+        </Space>
+      </Modal>
       <Modal
         title="个人资料"
         open={profileOpen}

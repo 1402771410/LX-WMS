@@ -3,10 +3,12 @@ import {
   Avatar,
   Button,
   Card,
+  Col,
   Form,
   Input,
   InputNumber,
   Modal,
+  Row,
   Select,
   Space,
   Switch,
@@ -161,6 +163,11 @@ type MailSettingsValues = {
   testTo?: string;
 };
 
+type AdminEmailValues = {
+  email: string;
+  emailCode: string;
+};
+
 const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [messageApi, contextHolder] = message.useMessage();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -208,12 +215,25 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [mailLoading, setMailLoading] = useState(false);
   const [mailSaving, setMailSaving] = useState(false);
   const [mailTesting, setMailTesting] = useState(false);
+  const [adminEmailLoading, setAdminEmailLoading] = useState(false);
+  const [adminEmailSending, setAdminEmailSending] = useState(false);
+  const [adminEmailBinding, setAdminEmailBinding] = useState(false);
+  const [adminEmailStatus, setAdminEmailStatus] = useState<{
+    email: string;
+    verified: boolean;
+    mailConfigured: boolean;
+  }>({
+    email: "",
+    verified: false,
+    mailConfigured: false,
+  });
   const [userForm] = Form.useForm<CreateUserValues>();
   const [userRoleForm] = Form.useForm<UpdateRoleValues>();
   const [userPasswordForm] = Form.useForm<ResetPasswordValues>();
   const [permissionForm] = Form.useForm<PermissionRuleValues>();
   const [backupForm] = Form.useForm<BackupSettings>();
   const [mailForm] = Form.useForm<MailSettingsValues>();
+  const [adminEmailForm] = Form.useForm<AdminEmailValues>();
   const [roleForm] = Form.useForm();
   const [oldPasswordForm] = Form.useForm<ChangePasswordWithOldValues>();
   const [recoveryResetForm] = Form.useForm<ChangePasswordWithRecoveryValues>();
@@ -448,25 +468,64 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     setDownloadingUpdate(false);
   }, [messageApi]);
 
+  const loadAdminEmailStatus = useCallback(async () => {
+    if (!currentUser?.id || !currentUser.username) {
+      return;
+    }
+    if (!window.api?.getAdminEmailStatus) {
+      messageApi.error("当前环境不支持管理员邮箱绑定");
+      return;
+    }
+    setAdminEmailLoading(true);
+    try {
+      const result = await window.api.getAdminEmailStatus({
+        userId: currentUser.id,
+        username: currentUser.username,
+      });
+      if (result.success) {
+        setAdminEmailStatus({
+          email: result.email ?? "",
+          verified: Boolean(result.verified),
+          mailConfigured: Boolean(result.mailConfigured),
+        });
+        adminEmailForm.setFieldsValue({
+          email: result.email ?? "",
+          emailCode: "",
+        });
+      } else {
+        messageApi.error(result.message ?? "读取管理员邮箱状态失败");
+      }
+    } catch {
+      messageApi.error("读取管理员邮箱状态失败");
+    } finally {
+      setAdminEmailLoading(false);
+    }
+  }, [adminEmailForm, currentUser?.id, currentUser?.username, messageApi]);
+
   const loadMailSettings = useCallback(async () => {
     if (!window.api?.getMailSettings) {
       messageApi.error("当前环境不支持邮件设置");
       return;
     }
     setMailLoading(true);
-    const result = await window.api.getMailSettings();
-    if (result.success && result.settings) {
-      mailForm.setFieldsValue({
-        user: result.settings.user,
-        pass: result.settings.pass,
-        host: result.settings.host,
-        port: result.settings.port,
-        secure: result.settings.secure,
-      });
-    } else {
-      messageApi.error(result.message ?? "读取邮件设置失败");
+    try {
+      const result = await window.api.getMailSettings();
+      if (result.success && result.settings) {
+        mailForm.setFieldsValue({
+          user: result.settings.user,
+          pass: result.settings.pass,
+          host: result.settings.host,
+          port: result.settings.port,
+          secure: result.settings.secure,
+        });
+      } else {
+        messageApi.error(result.message ?? "读取邮件设置失败");
+      }
+    } catch {
+      messageApi.error("读取邮件设置失败");
+    } finally {
+      setMailLoading(false);
     }
-    setMailLoading(false);
   }, [mailForm, messageApi]);
 
   const handleSaveMailSettings = useCallback(async () => {
@@ -492,6 +551,8 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
       });
       if (result.success) {
         messageApi.success(result.message ?? "邮件设置已保存");
+        setAdminEmailStatus((prev) => ({ ...prev, mailConfigured: true }));
+        void loadAdminEmailStatus();
       } else {
         messageApi.error(result.message ?? "保存失败");
       }
@@ -500,7 +561,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     } finally {
       setMailSaving(false);
     }
-  }, [mailForm, messageApi]);
+  }, [loadAdminEmailStatus, mailForm, messageApi]);
 
   const handleTestMail = useCallback(async () => {
     if (!window.api?.testMail) {
@@ -522,6 +583,104 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
       setMailTesting(false);
     }
   }, [mailForm, messageApi]);
+
+  const handleSendAdminEmailCode = useCallback(async () => {
+    if (!currentUser?.id || !currentUser.username) {
+      messageApi.error("请先登录");
+      return;
+    }
+    if (!window.api?.sendAdminBindEmailCode) {
+      messageApi.error("当前环境不支持管理员邮箱绑定");
+      return;
+    }
+    setAdminEmailSending(true);
+    try {
+      const values = await adminEmailForm.validateFields(["email"]);
+      const result = await window.api.sendAdminBindEmailCode({
+        userId: currentUser.id,
+        username: currentUser.username,
+        email: values.email.trim(),
+      });
+      if (result.success) {
+        messageApi.success(result.message ?? "验证码已发送");
+      } else {
+        messageApi.error(result.message ?? "发送失败");
+      }
+    } finally {
+      setAdminEmailSending(false);
+    }
+  }, [adminEmailForm, currentUser?.id, currentUser?.username, messageApi]);
+
+  const handleBindAdminEmail = useCallback(async () => {
+    if (!currentUser?.id || !currentUser.username) {
+      messageApi.error("请先登录");
+      return;
+    }
+    if (!window.api?.bindAdminEmail) {
+      messageApi.error("当前环境不支持管理员邮箱绑定");
+      return;
+    }
+    setAdminEmailBinding(true);
+    try {
+      const values = await adminEmailForm.validateFields(["email", "emailCode"]);
+      const result = await window.api.bindAdminEmail({
+        userId: currentUser.id,
+        username: currentUser.username,
+        email: values.email.trim(),
+        emailCode: values.emailCode.trim(),
+      });
+      if (result.success) {
+        messageApi.success(result.message ?? "管理员邮箱已验证");
+        await loadAdminEmailStatus();
+      } else {
+        messageApi.error(result.message ?? "验证失败");
+      }
+    } finally {
+      setAdminEmailBinding(false);
+    }
+  }, [adminEmailForm, currentUser?.id, currentUser?.username, loadAdminEmailStatus, messageApi]);
+
+  const mailGuideItems = useMemo(
+    () => [
+      {
+        name: "QQ 邮箱",
+        host: "smtp.qq.com",
+        ports: "465/587",
+        url: "https://service.mail.qq.com/detail/0/82",
+      },
+      {
+        name: "网易 163 邮箱",
+        host: "smtp.163.com",
+        ports: "465/25",
+        url: "https://help.mail.163.com/",
+      },
+      {
+        name: "阿里企业邮箱",
+        host: "smtp.mxhichina.com",
+        ports: "465/25",
+        url: "https://help.aliyun.com/product/35462.html",
+      },
+    ],
+    [],
+  );
+
+  const handleOpenGuide = useCallback(
+    async (url: string) => {
+      if (!window.api?.openExternal) {
+        messageApi.error("当前环境不支持打开浏览器");
+        return;
+      }
+      try {
+        const result = await window.api.openExternal({ url });
+        if (!result.success) {
+          messageApi.error(result.message ?? "打开失败");
+        }
+      } catch {
+        messageApi.error("打开失败");
+      }
+    },
+    [messageApi],
+  );
 
   const updateNotes = useMemo(() => {
     if (!updateInfo?.releaseNotes) return [];
@@ -563,8 +722,9 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   useEffect(() => {
     if (viewKey === "mail") {
       loadMailSettings();
+      void loadAdminEmailStatus();
     }
-  }, [loadMailSettings, viewKey]);
+  }, [loadAdminEmailStatus, loadMailSettings, viewKey]);
 
   const handleAvatarChange = (info: { file: UploadFile; fileList: UploadFile[] }) => {
     setAvatarFiles(info.fileList.slice(-1));
@@ -578,6 +738,10 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   };
 
   const openRoleModal = (record: UserRow) => {
+    if (record.role === "ADMIN") {
+      messageApi.error("管理员账号不可修改用户组");
+      return;
+    }
     setRoleTarget(record);
     userRoleForm.setFieldsValue({ role: record.role });
     setOpenUserRole(true);
@@ -590,6 +754,10 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   };
 
   const handleToggleStatus = (record: UserRow) => {
+    if (record.role === "ADMIN") {
+      messageApi.error("管理员账号不可封禁");
+      return;
+    }
     const nextStatus = record.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
     const canToggle = nextStatus === "DISABLED" ? canDisableUser : canEnableUser;
     if (!canToggle) {
@@ -893,7 +1061,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
             <Button
               type="link"
               onClick={() => openRoleModal(record)}
-              disabled={!canManageSystem}
+              disabled={!canManageSystem || record.role === "ADMIN"}
             >
               修改用户组
             </Button>
@@ -906,7 +1074,10 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
             </Button>
             <Button
               onClick={() => handleToggleStatus(record)}
-              disabled={record.status === "ACTIVE" ? !canDisableUser : !canEnableUser}
+              disabled={
+                record.role === "ADMIN" ||
+                (record.status === "ACTIVE" ? !canDisableUser : !canEnableUser)
+              }
             >
               {record.status === "ACTIVE" ? "封禁" : "解封"}
             </Button>
@@ -1110,6 +1281,10 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const handleSaveUserRole = async () => {
     if (!roleTarget) {
       setOpenUserRole(false);
+      return;
+    }
+    if (roleTarget.role === "ADMIN") {
+      messageApi.error("管理员账号不可修改用户组");
       return;
     }
     if (!canManageSystem) {
@@ -1356,57 +1531,137 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
           />
         </div>
       ) : viewKey === "mail" ? (
-        <Form form={mailForm} layout="vertical" style={{ maxWidth: 520 }}>
-          <Form.Item
-            name="user"
-            label="发件邮箱"
-            rules={[
-              { required: true, message: "请输入发件邮箱" },
-              { type: "email", message: "发件邮箱格式不正确" },
-            ]}
-          >
-            <Input placeholder="请输入发件邮箱" />
-          </Form.Item>
-          <Form.Item
-            name="pass"
-            label="SMTP 授权码"
-            rules={[{ required: true, message: "请输入邮箱授权码" }]}
-          >
-            <Input.Password placeholder="请输入邮箱授权码" />
-          </Form.Item>
-          <Form.Item
-            name="host"
-            label="SMTP 服务器"
-            rules={[{ required: true, message: "请输入 SMTP 服务器" }]}
-          >
-            <Input placeholder="例如：smtp.qq.com" />
-          </Form.Item>
-          <Form.Item
-            name="port"
-            label="SMTP 端口"
-            rules={[{ required: true, message: "请输入 SMTP 端口" }]}
-          >
-            <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item name="secure" label="SSL 加密" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="testTo"
-            label="测试收件邮箱"
-            rules={[{ type: "email", message: "邮箱格式不正确" }]}
-          >
-            <Input placeholder="用于测试发送，可选" />
-          </Form.Item>
-          <Space>
-            <Button type="primary" onClick={handleSaveMailSettings} loading={mailSaving}>
-              保存设置
-            </Button>
-            <Button onClick={handleTestMail} loading={mailTesting} disabled={mailLoading}>
-              发送测试邮件
-            </Button>
-          </Space>
-        </Form>
+        <Row gutter={[24, 24]} wrap={false}>
+          <Col flex="1 1 520px">
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Form form={mailForm} layout="vertical">
+                <Form.Item
+                  name="user"
+                  label="发件邮箱"
+                  rules={[
+                    { required: true, message: "请输入发件邮箱" },
+                    { type: "email", message: "发件邮箱格式不正确" },
+                  ]}
+                >
+                  <Input placeholder="请输入发件邮箱" />
+                </Form.Item>
+                <Form.Item
+                  name="pass"
+                  label="SMTP 授权码"
+                  rules={[{ required: true, message: "请输入邮箱授权码" }]}
+                >
+                  <Input.Password placeholder="请输入邮箱授权码" />
+                </Form.Item>
+                <Form.Item
+                  name="host"
+                  label="SMTP 服务器"
+                  rules={[{ required: true, message: "请输入 SMTP 服务器" }]}
+                >
+                  <Input placeholder="例如：smtp.qq.com" />
+                </Form.Item>
+                <Form.Item
+                  name="port"
+                  label="SMTP 端口"
+                  rules={[{ required: true, message: "请输入 SMTP 端口" }]}
+                >
+                  <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item name="secure" label="SSL 加密" valuePropName="checked">
+                  <Switch />
+                </Form.Item>
+                <Form.Item
+                  name="testTo"
+                  label="测试收件邮箱"
+                  rules={[{ type: "email", message: "邮箱格式不正确" }]}
+                >
+                  <Input placeholder="用于测试发送，可选" />
+                </Form.Item>
+                <Space>
+                  <Button type="primary" onClick={handleSaveMailSettings} loading={mailSaving}>
+                    保存设置
+                  </Button>
+                  <Button onClick={handleTestMail} loading={mailTesting} disabled={mailLoading}>
+                    发送测试邮件
+                  </Button>
+                </Space>
+              </Form>
+              <Card size="small">
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Typography.Text strong>管理员邮箱绑定</Typography.Text>
+                  <Typography.Text type="secondary">
+                    当前状态：{adminEmailStatus.verified ? "已验证" : "未验证"}
+                  </Typography.Text>
+                  <Form form={adminEmailForm} layout="vertical">
+                    <Form.Item
+                      name="email"
+                      label="管理员邮箱"
+                      rules={[
+                        { required: true, message: "请输入管理员邮箱" },
+                        { type: "email", message: "邮箱格式不正确" },
+                      ]}
+                    >
+                      <Input placeholder="请输入管理员邮箱" disabled={adminEmailLoading} />
+                    </Form.Item>
+                    <Form.Item
+                      name="emailCode"
+                      label="邮箱验证码"
+                      rules={[{ required: true, message: "请输入邮箱验证码" }]}
+                    >
+                      <Input
+                        placeholder="请输入邮箱验证码"
+                        addonAfter={
+                          <Button
+                            type="link"
+                            onClick={handleSendAdminEmailCode}
+                            loading={adminEmailSending}
+                            disabled={!adminEmailStatus.mailConfigured}
+                          >
+                            发送验证码
+                          </Button>
+                        }
+                      />
+                    </Form.Item>
+                    <Space>
+                      <Button
+                        type="primary"
+                        onClick={handleBindAdminEmail}
+                        loading={adminEmailBinding}
+                      >
+                        验证并绑定
+                      </Button>
+                      <Button onClick={loadAdminEmailStatus} loading={adminEmailLoading}>
+                        刷新状态
+                      </Button>
+                    </Space>
+                  </Form>
+                  {!adminEmailStatus.mailConfigured ? (
+                    <Typography.Text type="secondary">请先完成上方邮件设置</Typography.Text>
+                  ) : null}
+                </Space>
+              </Card>
+            </Space>
+          </Col>
+          <Col flex="0 0 360px">
+            <Card size="small" title="常用邮箱配置说明">
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {mailGuideItems.map((item) => (
+                  <Card key={item.name} size="small">
+                    <Space direction="vertical" style={{ width: "100%" }}>
+                      <Typography.Text strong>{item.name}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        SMTP 服务器：{item.host}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">端口：{item.ports}</Typography.Text>
+                      <Button type="link" onClick={() => handleOpenGuide(item.url)}>
+                        打开配置指南
+                      </Button>
+                    </Space>
+                  </Card>
+                ))}
+              </Space>
+            </Card>
+          </Col>
+        </Row>
       ) : viewKey === "update" ? (
         <Space direction="vertical" style={{ width: "100%" }}>
           <Space>
@@ -1459,9 +1714,6 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
           </Form.Item>
           <Form.Item label="默认仓库" name="warehouse">
             <Input placeholder="请输入默认仓库" />
-          </Form.Item>
-          <Form.Item label="管理员邮箱" name="email">
-            <Input placeholder="请输入管理员邮箱" />
           </Form.Item>
           <Space>
             <Button type="primary" onClick={() => messageApi.success("设置已保存")}>

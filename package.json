@@ -26,6 +26,7 @@
   "build": {
     "appId": "com.lx.wms",
     "productName": "LX-WMS",
+    "artifactName": "LX-WMS-Setup-${version}.exe",
     "files": [
       "dist/**",
       "dist-electron/**",

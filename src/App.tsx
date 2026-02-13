@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Spin, message } from "antd";
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Button, Card, Space, Spin, Typography, message } from "antd";
 import MainLayout from "./pages/MainLayout";
 import Login from "./pages/Login";
 import SetupAdmin from "./pages/SetupAdmin";
@@ -7,6 +7,76 @@ import type { UserInfo } from "./types/runtime";
 import "./App.css";
 
 type ViewState = "loading" | "setup" | "login" | "app";
+
+type ErrorBoundaryState = {
+  hasError: boolean;
+  message: string;
+  name: string;
+  stack: string;
+};
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    message: "",
+    name: "",
+    stack: "",
+  };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return {
+      hasError: true,
+      message: error?.message ?? "未知错误",
+      name: error?.name ?? "Error",
+      stack: "",
+    };
+  }
+
+  componentDidCatch(error: Error) {
+    this.setState({ stack: error?.stack ?? "" });
+  }
+
+  render() {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+    return (
+      <div className="app-loading">
+        <Card style={{ width: 520 }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Typography.Title level={4}>页面出现异常</Typography.Title>
+            <Typography.Text type="secondary">
+              请点击刷新重试，若问题持续请联系管理员。
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              错误信息：{this.state.name ? `${this.state.name}: ` : ""}
+              {this.state.message || "未知错误"}
+            </Typography.Text>
+            {this.state.stack ? (
+              <Typography.Paragraph
+                type="secondary"
+                copyable
+                style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}
+              >
+                {this.state.stack}
+              </Typography.Paragraph>
+            ) : null}
+            <Space>
+              <Button type="primary" onClick={() => window.location.reload()}>
+                刷新页面
+              </Button>
+              <Button
+                onClick={() => this.setState({ hasError: false, message: "" })}
+              >
+                继续尝试
+              </Button>
+            </Space>
+          </Space>
+        </Card>
+      </div>
+    );
+  }
+}
 
 function App() {
   const [viewState, setViewState] = useState<ViewState>("loading");
@@ -144,7 +214,7 @@ function App() {
   return (
     <div className="app-root">
       {contextHolder}
-      {content}
+      <ErrorBoundary>{content}</ErrorBoundary>
     </div>
   );
 }

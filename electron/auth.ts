@@ -59,7 +59,7 @@ export type CreateUserResult =
   | { success: true; user: UserRecord; recoveryKey: string }
   | { success: false; message: string };
 
-export type EmailCodePurpose = "admin_register" | "password_reset";
+export type EmailCodePurpose = "admin_register" | "password_reset" | "admin_email_bind";
 
 export type EmailCodeRecord = {
   code: string;
@@ -571,6 +571,15 @@ export const updateUserRole = (
   userId: string,
   role: string,
 ): ActionResult => {
+  const row = db
+    .prepare("SELECT role FROM users WHERE id = ?")
+    .get(userId) as { role?: string } | undefined;
+  if (!row) {
+    return { success: false, message: "用户不存在" };
+  }
+  if (row.role === "ADMIN") {
+    return { success: false, message: "管理员账号不可修改用户组" };
+  }
   const now = new Date().toISOString();
   db.prepare("UPDATE users SET role = ?, updated_at = ? WHERE id = ?").run(
     role,
@@ -585,6 +594,15 @@ export const updateUserStatus = (
   userId: string,
   status: string,
 ): ActionResult => {
+  const row = db
+    .prepare("SELECT role FROM users WHERE id = ?")
+    .get(userId) as { role?: string } | undefined;
+  if (!row) {
+    return { success: false, message: "用户不存在" };
+  }
+  if (row.role === "ADMIN") {
+    return { success: false, message: "管理员账号状态不可修改" };
+  }
   const now = new Date().toISOString();
   db.prepare("UPDATE users SET status = ?, updated_at = ? WHERE id = ?").run(
     status,

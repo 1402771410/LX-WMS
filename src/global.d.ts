@@ -8,8 +8,8 @@ export type AuthPayload = {
 export type RegisterAdminPayload = {
   username: string;
   password: string;
-  email: string;
-  emailCode: string;
+  email?: string;
+  emailCode?: string;
 };
 
 export type AuthResult =
@@ -49,6 +49,23 @@ export type ResetByEmailPayload = {
 export type EmailCodePayload = {
   username: string;
   email: string;
+};
+
+export type ExternalLinkPayload = {
+  url: string;
+};
+
+export type AdminEmailPayload = {
+  userId: string;
+  username: string;
+  email: string;
+};
+
+export type AdminEmailVerifyPayload = {
+  userId: string;
+  username: string;
+  email: string;
+  emailCode: string;
 };
 
 export type ChangePasswordPayload = {
@@ -109,8 +126,21 @@ export type MailSettingsPayload = {
 export type ApiBridge = {
   getInitState: () => Promise<InitState>;
   getAppVersion: () => Promise<{ version: string }>;
+  openExternal: (payload: ExternalLinkPayload) => Promise<ActionResult>;
   registerAdmin: (payload: RegisterAdminPayload) => Promise<RegisterAdminResult>;
   sendAdminEmailCode: (payload: EmailCodePayload) => Promise<ActionResult>;
+  getAdminEmailStatus: (payload: {
+    userId: string;
+    username: string;
+  }) => Promise<{
+    success: boolean;
+    email?: string;
+    verified?: boolean;
+    mailConfigured?: boolean;
+    message?: string;
+  }>;
+  sendAdminBindEmailCode: (payload: AdminEmailPayload) => Promise<ActionResult>;
+  bindAdminEmail: (payload: AdminEmailVerifyPayload) => Promise<ActionResult>;
   login: (payload: AuthPayload) => Promise<AuthResult>;
   confirmRecoveryKey: (payload: RecoveryConfirmPayload) => Promise<ActionResult>;
   validateRecoveryKey: (
@@ -141,6 +171,7 @@ export type ApiBridge = {
   exportBackup: (payload: BackupReadPayload) => Promise<ActionResult>;
   restoreDatabase: (payload: BackupRestorePayload) => Promise<ActionResult>;
   getMailSettings: () => Promise<{ success: boolean; settings?: MailSettingsPayload; message?: string }>;
+  getMailStatus: () => Promise<{ success: boolean; configured?: boolean; message?: string }>;
   saveMailSettings: (payload: MailSettingsPayload) => Promise<ActionResult>;
   testMail: (payload: { to: string }) => Promise<ActionResult>;
 };

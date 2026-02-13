@@ -8,8 +8,6 @@ type SetupAdminProps = {
 
 type FormValues = {
   username: string;
-  email: string;
-  emailCode: string;
   password: string;
   confirmPassword: string;
 };
@@ -22,14 +20,11 @@ const SetupAdmin = ({ onRegistered }: SetupAdminProps) => {
   const [recoveryUserId, setRecoveryUserId] = useState<string | null>(null);
   const [openRecovery, setOpenRecovery] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [sendingCode, setSendingCode] = useState(false);
 
   const handleSubmit = async (values: FormValues) => {
     setSubmitting(true);
     const result = await window.api.registerAdmin({
       username: values.username,
-      email: values.email,
-      emailCode: values.emailCode,
       password: values.password,
     });
     if (result.success) {
@@ -40,28 +35,6 @@ const SetupAdmin = ({ onRegistered }: SetupAdminProps) => {
       messageApi.error(result.message);
     }
     setSubmitting(false);
-  };
-
-  const handleSendCode = async () => {
-    if (!window.api?.sendAdminEmailCode) {
-      messageApi.error("当前环境不支持邮箱验证");
-      return;
-    }
-    try {
-      setSendingCode(true);
-      const values = await form.validateFields(["username", "email"]);
-      const result = await window.api.sendAdminEmailCode({
-        username: values.username,
-        email: values.email,
-      });
-      if (result.success) {
-        messageApi.success("验证码已发送");
-      } else {
-        messageApi.error(result.message);
-      }
-    } finally {
-      setSendingCode(false);
-    }
   };
 
   const handleConfirmRecovery = async () => {
@@ -131,30 +104,6 @@ const SetupAdmin = ({ onRegistered }: SetupAdminProps) => {
             <Input placeholder="请输入管理员账号" autoFocus />
           </Form.Item>
           <Form.Item
-            name="email"
-            label="管理员邮箱"
-            rules={[
-              { required: true, message: "请输入管理员邮箱" },
-              { type: "email", message: "邮箱格式不正确" },
-            ]}
-          >
-            <Input placeholder="请输入管理员邮箱" />
-          </Form.Item>
-          <Form.Item
-            name="emailCode"
-            label="邮箱验证码"
-            rules={[{ required: true, message: "请输入邮箱验证码" }]}
-          >
-            <Input
-              placeholder="请输入邮箱验证码"
-              addonAfter={
-                <Button type="link" onClick={handleSendCode} loading={sendingCode}>
-                  发送验证码
-                </Button>
-              }
-            />
-          </Form.Item>
-          <Form.Item
             name="password"
             label="管理员密码"
             rules={[
@@ -168,6 +117,9 @@ const SetupAdmin = ({ onRegistered }: SetupAdminProps) => {
           >
             <Input.Password placeholder="请输入管理员密码" />
           </Form.Item>
+          <Typography.Text type="secondary">
+            管理员邮箱请登录后在系统设置中绑定并验证
+          </Typography.Text>
           <Form.Item
             name="confirmPassword"
             label="确认密码"

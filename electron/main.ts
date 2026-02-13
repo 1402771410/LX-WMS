@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import nodemailer from "nodemailer";
-import { validateMailSettings } from "./mail";
+import { validateMailSettings } from "./mail.js";
 import { applyMigrations, createDatabase, initializeDatabase } from "./db.js";
 import {
   changePasswordWithOldPassword,
@@ -37,8 +37,8 @@ type AuthPayload = {
 type RegisterAdminPayload = {
   username: string;
   password: string;
-  email: string;
-  emailCode: string;
+  email?: string;
+  emailCode?: string;
 };
 
 type RecoveryConfirmPayload = {
@@ -62,6 +62,23 @@ type ResetByEmailPayload = {
 type EmailCodePayload = {
   username: string;
   email: string;
+};
+
+type ExternalLinkPayload = {
+  url: string;
+};
+
+type AdminEmailPayload = {
+  userId: string;
+  username: string;
+  email: string;
+};
+
+type AdminEmailVerifyPayload = {
+  userId: string;
+  username: string;
+  email: string;
+  emailCode: string;
 };
 
 type ChangePasswordPayload = {
@@ -179,6 +196,11 @@ const getMailerConfig = (): {
   return { ok: true, ...result.settings };
 };
 
+const isMailConfigured = (): boolean => {
+  const result = getMailerConfig();
+  return result.ok;
+};
+
 const writeAppSetting = (key: string, value: string): void => {
   db.prepare(
     `
@@ -187,6 +209,21 @@ const writeAppSetting = (key: string, value: string): void => {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `,
   ).run(key, value);
+};
+
+const getAdminEmailStatus = (
+  userId: string,
+): { email: string; verified: boolean } => {
+  const row = db
+    .prepare("SELECT email FROM users WHERE id = ?")
+    .get(userId) as { email?: string } | undefined;
+  const email = row?.email?.trim() ?? "";
+  const verifiedEmail = (readAppSetting("admin_email_verified") ?? "")
+    .trim()
+    .toLowerCase();
+  const verified =
+    !!email && !!verifiedEmail && email.trim().toLowerCase() === verifiedEmail;
+  return { email, verified };
 };
 
 const getMailSettingsSnapshot = (): {
@@ -346,77 +383,27 @@ ipcMain.handle("auth:register-admin", (_, payload: RegisterAdminPayload) => {
   const username = normalizeInput(payload.username ?? "");
   const password = payload.password ?? "";
   const email = normalizeInput(payload.email ?? "");
-  const emailCode = normalizeInput(payload.emailCode ?? "");
   const usernameError = validateUsername(username);
   if (usernameError) {
     return { success: false, message: usernameError };
-  }
-  const emailError = validateEmail(email);
-  if (emailError) {
-    return { success: false, message: emailError };
-  }
-  if (!email) {
-    return { success: false, message: "请输入管理员邮箱" };
-  }
-  if (!emailCode) {
-    return { success: false, message: "请输入邮箱验证码" };
   }
   const passwordError = validatePassword(password);
   if (passwordError) {
     return { success: false, message: passwordError };
   }
-  const verifyResult = verifyEmailCode(
-    db,
-    "admin_register",
-    username,
-    email,
-    emailCode,
-  );
-  if (!verifyResult.success) {
-    return verifyResult;
+  if (email) {
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return { success: false, message: emailError };
+    }
   }
   const result = registerAdmin(db, username, password, email);
-  if (result.success) {
-    void sendMail(
-      email,
-      "LX-WMS 管理员恢复密钥",
-      `您的管理员恢复密钥为：${result.recoveryKey}\n请妥善保存，勿泄露给他人。`,
-    );
-  }
   return result;
 });
 
 ipcMain.handle("auth:send-admin-email-code", async (_, payload: EmailCodePayload) => {
-  const username = normalizeInput(payload.username ?? "");
-  const email = normalizeInput(payload.email ?? "");
-  if (hasAdminUser(db)) {
-    return { success: false, message: "系统已初始化，无法发送管理员验证码" };
-  }
-  const usernameError = validateUsername(username);
-  if (usernameError) {
-    return { success: false, message: usernameError };
-  }
-  const emailError = validateEmail(email);
-  if (emailError) {
-    return { success: false, message: emailError };
-  }
-  const intervalResult = verifyEmailCodeSendInterval(db, "admin_register", username);
-  if (!intervalResult.success) {
-    return intervalResult;
-  }
-  const code = createEmailCode();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  saveEmailCode(db, "admin_register", username, email, code, expiresAt);
-  const sendResult = await sendMail(
-    email,
-    "LX-WMS 管理员邮箱验证码",
-    `您的管理员邮箱验证码为：${code}\n有效期 10 分钟，请勿泄露给他人。`,
-  );
-  if (sendResult.success) {
-    markEmailCodeSent(db, "admin_register", username);
-    return { success: true };
-  }
-  return { success: false, message: sendResult.message ?? "发送失败" };
+  void payload;
+  return { success: false, message: "管理员初始化不需要邮箱验证码" };
 });
 
 ipcMain.handle("user:list", () => {
@@ -659,8 +646,132 @@ ipcMain.handle("app:get-version", () => {
   return { version: app.getVersion() };
 });
 
+ipcMain.handle("app:open-external", async (_, payload: ExternalLinkPayload) => {
+  const url = normalizeInput(payload?.url ?? "");
+  if (!url) {
+    return { success: false, message: "链接不能为空" };
+  }
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch {
+    return { success: false, message: "无法打开链接" };
+  }
+});
+
 ipcMain.handle("mail:get-settings", () => {
   return { success: true, settings: getMailSettingsSnapshot() };
+});
+
+ipcMain.handle("mail:get-status", () => {
+  return { success: true, configured: isMailConfigured() };
+});
+
+ipcMain.handle(
+  "admin:get-email-status",
+  (_, payload: { userId: string; username: string }) => {
+    const userId = normalizeInput(payload.userId ?? "");
+    const username = normalizeInput(payload.username ?? "");
+    if (!userId || !username) {
+      return { success: false, message: "管理员信息不完整" };
+    }
+    const row = db
+      .prepare("SELECT id, username, role FROM users WHERE id = ?")
+      .get(userId) as { id: string; username: string; role: string } | undefined;
+    if (!row || row.username !== username || row.role !== "ADMIN") {
+      return { success: false, message: "管理员信息不匹配" };
+    }
+    const status = getAdminEmailStatus(userId);
+    return {
+      success: true,
+      email: status.email,
+      verified: status.verified,
+      mailConfigured: isMailConfigured(),
+    };
+  },
+);
+
+ipcMain.handle("admin:send-bind-email-code", async (_, payload: AdminEmailPayload) => {
+  if (!isMailConfigured()) {
+    return { success: false, message: "请先完成邮件设置" };
+  }
+  const userId = normalizeInput(payload.userId ?? "");
+  const username = normalizeInput(payload.username ?? "");
+  const email = normalizeInput(payload.email ?? "");
+  if (!userId || !username) {
+    return { success: false, message: "管理员信息不完整" };
+  }
+  const row = db
+    .prepare("SELECT id, username, role FROM users WHERE id = ?")
+    .get(userId) as { id: string; username: string; role: string } | undefined;
+  if (!row || row.username !== username || row.role !== "ADMIN") {
+    return { success: false, message: "管理员信息不匹配" };
+  }
+  const emailError = validateEmail(email);
+  if (emailError) {
+    return { success: false, message: emailError };
+  }
+  const intervalResult = verifyEmailCodeSendInterval(db, "admin_email_bind", username);
+  if (!intervalResult.success) {
+    return intervalResult;
+  }
+  const code = createEmailCode();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  saveEmailCode(db, "admin_email_bind", username, email, code, expiresAt);
+  const sendResult = await sendMail(
+    email,
+    "LX-WMS 管理员邮箱验证码",
+    `您的管理员邮箱验证码为：${code}\n有效期 10 分钟，请勿泄露给他人。`,
+  );
+  if (sendResult.success) {
+    markEmailCodeSent(db, "admin_email_bind", username);
+    return { success: true };
+  }
+  return { success: false, message: sendResult.message ?? "发送失败" };
+});
+
+ipcMain.handle("admin:bind-email", (_, payload: AdminEmailVerifyPayload) => {
+  if (!isMailConfigured()) {
+    return { success: false, message: "请先完成邮件设置" };
+  }
+  const userId = normalizeInput(payload.userId ?? "");
+  const username = normalizeInput(payload.username ?? "");
+  const email = normalizeInput(payload.email ?? "");
+  const emailCode = normalizeInput(payload.emailCode ?? "");
+  if (!userId || !username) {
+    return { success: false, message: "管理员信息不完整" };
+  }
+  const row = db
+    .prepare("SELECT id, username, role FROM users WHERE id = ?")
+    .get(userId) as { id: string; username: string; role: string } | undefined;
+  if (!row || row.username !== username || row.role !== "ADMIN") {
+    return { success: false, message: "管理员信息不匹配" };
+  }
+  const emailError = validateEmail(email);
+  if (emailError) {
+    return { success: false, message: emailError };
+  }
+  if (!emailCode) {
+    return { success: false, message: "请输入邮箱验证码" };
+  }
+  const verifyResult = verifyEmailCode(
+    db,
+    "admin_email_bind",
+    username,
+    email,
+    emailCode,
+  );
+  if (!verifyResult.success) {
+    return verifyResult;
+  }
+  const now = new Date().toISOString();
+  db.prepare("UPDATE users SET email = ?, updated_at = ? WHERE id = ?").run(
+    email.trim(),
+    now,
+    userId,
+  );
+  writeAppSetting("admin_email_verified", email.trim().toLowerCase());
+  return { success: true, message: "管理员邮箱已验证" };
 });
 
 ipcMain.handle("mail:save-settings", (_, payload) => {
