@@ -92,6 +92,14 @@ export type CreateUserPayload = {
   avatarUrl?: string;
 };
 
+export type UpdateProfilePayload = {
+  userId: string;
+  displayName?: string;
+  phone?: string;
+  email?: string;
+  avatarUrl?: string;
+};
+
 export type UpdateUserRolePayload = {
   userId: string;
   role: string;
@@ -188,6 +196,8 @@ const api = {
     ipcRenderer.invoke("user:list"),
   createUser: (payload: CreateUserPayload): Promise<{ success: boolean; user?: unknown; recoveryKey?: string; message?: string }> =>
     ipcRenderer.invoke("user:create", payload),
+  updateProfile: (payload: UpdateProfilePayload): Promise<ActionResult> =>
+    ipcRenderer.invoke("user:update-profile", payload),
   updateUserRole: (payload: UpdateUserRolePayload): Promise<ActionResult> =>
     ipcRenderer.invoke("user:update-role", payload),
   updateUserStatus: (payload: UpdateUserStatusPayload): Promise<ActionResult> =>

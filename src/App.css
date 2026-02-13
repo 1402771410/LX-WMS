@@ -71,8 +71,8 @@
   height: 32px;
 }
 
-.ant-menu-light.ant-menu-root > .ant-menu-item,
-.ant-menu-light.ant-menu-root > .ant-menu-submenu > .ant-menu-submenu-title {
+.ant-menu-light.ant-menu-root:not(.ant-menu-inline-collapsed) > .ant-menu-item,
+.ant-menu-light.ant-menu-root:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-submenu-title {
   padding-left: 16px !important;
 }
 
@@ -82,7 +82,8 @@
   font-size: 18px;
 }
 
-.ant-menu-light .ant-menu-item {
+.ant-menu-light .ant-menu-item,
+.ant-menu-light .ant-menu-submenu-title {
   margin: 4px 0;
   border-radius: 10px;
   height: 44px;
@@ -105,7 +106,8 @@
   color: #1677ff;
 }
 
-.ant-menu-light .ant-menu-item:hover {
+.ant-menu-light .ant-menu-item:hover,
+.ant-menu-light .ant-menu-submenu-title:hover {
   background: #f2f6ff;
 }
 

@@ -79,7 +79,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   const [profileForm] = Form.useForm<ProfileValues>();
   const [passwordForm] = Form.useForm<PasswordValues>();
   const avatarUrl = Form.useWatch("avatarUrl", profileForm);
-  const displayAvatar = avatarUrl || currentUser?.avatarUrl;
+  const displayAvatar = avatarUrl === undefined ? currentUser?.avatarUrl : avatarUrl;
   const [profileAvatarFiles, setProfileAvatarFiles] = useState<UploadFile[]>([]);
   const [complianceOpen, setComplianceOpen] = useState(false);
   const [complianceLoading, setComplianceLoading] = useState(false);
@@ -344,20 +344,24 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   const confirmClearCache = () => {
     Modal.confirm({
       title: "确认清理缓存？",
-      content: "将清除本地缓存并退出登录。",
+      content: "将清除本地会话缓存并重新加载，不会删除业务数据。",
       okText: "确认清理",
       cancelText: "取消",
       okButtonProps: { danger: true },
       onOk: () => {
         try {
-          localStorage.clear();
+          // 仅清理会话存储，保留 localStorage 中的业务数据（库存、权限等）
           sessionStorage.clear();
+          // 仅清理当前用户的资料缓存
+          if (currentUser) {
+            localStorage.removeItem(`lx-wms.profile.${currentUser.id}`);
+          }
         } catch {
           messageApi.error("缓存清理失败，请稍后重试");
           return;
         }
         messageApi.success("缓存已清理");
-        onLogout();
+        window.location.reload();
       },
     });
   };
@@ -389,15 +393,26 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
     setProfileOpen(true);
   };
 
-  const handleProfileAvatarChange = (info: { file: UploadFile; fileList: UploadFile[] }) => {
-    setProfileAvatarFiles(info.fileList.slice(-1));
-    if (!info.file.originFileObj) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      profileForm.setFieldsValue({ avatarUrl: typeof result === "string" ? result : undefined });
-    };
-    reader.readAsDataURL(info.file.originFileObj);
+  const handleProfileAvatarChange = ({ fileList }: { fileList: UploadFile[] }) => {
+    const newFileList = fileList.slice(-1);
+    setProfileAvatarFiles(newFileList);
+
+    if (newFileList.length > 0) {
+      const file = newFileList[0];
+      if (file.originFileObj) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file.originFileObj);
+        reader.onload = () => {
+          profileForm.setFieldsValue({
+            avatarUrl: reader.result as string,
+          });
+        };
+      }
+    } else {
+      profileForm.setFieldsValue({
+        avatarUrl: "",
+      });
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -408,6 +423,16 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
     setProfileSaving(true);
     try {
       const values = await profileForm.validateFields();
+      if (window.api?.updateProfile) {
+        const result = await window.api.updateProfile({
+          userId: currentUser.id,
+          ...values,
+        });
+        if (!result.success) {
+          messageApi.error(result.message ?? "更新失败");
+          return;
+        }
+      }
       const nextUser: UserInfo = { ...currentUser, ...values };
       onUpdateProfile(nextUser);
       messageApi.success("个人资料已更新");
@@ -579,7 +604,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
           >
             <Button type="text">
               <Space>
-                <Avatar src={displayAvatar} icon={<UserOutlined />} />
+                <Avatar src={currentUser?.avatarUrl} icon={<UserOutlined />} />
                 <span>{displayName}</span>
               </Space>
             </Button>
@@ -642,7 +667,10 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
                   <Form.Item label="头像预览">
                     <Avatar size={64} src={displayAvatar} icon={<UserOutlined />} />
                   </Form.Item>
-                  <Form.Item name="avatarUrl" label="头像上传">
+                  <Form.Item name="avatarUrl" hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item label="头像上传">
                     <Upload
                       accept="image/png,image/jpeg,image/webp"
                       maxCount={1}

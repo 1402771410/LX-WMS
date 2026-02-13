@@ -13,8 +13,9 @@ Function .onVerifyInstDir
 FunctionEnd
 
 !macro customUnInstall
-  RMDir /r "$APPDATA\\LX-WMS"
-  RMDir /r "$LOCALAPPDATA\\LX-WMS"
-  RMDir /r "$APPDATA\\lx-wms"
-  RMDir /r "$LOCALAPPDATA\\lx-wms"
+  ; 保留用户数据，防止更新或卸载时丢失数据库
+  ; RMDir /r "$APPDATA\\LX-WMS"
+  ; RMDir /r "$LOCALAPPDATA\\LX-WMS"
+  ; RMDir /r "$APPDATA\\lx-wms"
+  ; RMDir /r "$LOCALAPPDATA\\lx-wms"
 !macroend

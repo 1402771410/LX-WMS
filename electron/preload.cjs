@@ -28,6 +28,7 @@ const api = {
     ipcRenderer.invoke("auth:reveal-recovery-key", payload),
   listUsers: () => ipcRenderer.invoke("user:list"),
   createUser: (payload) => ipcRenderer.invoke("user:create", payload),
+  updateProfile: (payload) => ipcRenderer.invoke("user:update-profile", payload),
   updateUserRole: (payload) => ipcRenderer.invoke("user:update-role", payload),
   updateUserStatus: (payload) => ipcRenderer.invoke("user:update-status", payload),
   resetUserPassword: (payload) => ipcRenderer.invoke("user:reset-password", payload),

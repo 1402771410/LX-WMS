@@ -26,6 +26,8 @@ import {
   updateUserRole,
   updateUserStatus,
   markEmailCodeSent,
+  updateProfile,
+  type UpdateProfilePayload,
 } from "./auth.js";
 import { checkForUpdates, setupAutoUpdater } from "./updater.js";
 
@@ -459,6 +461,32 @@ ipcMain.handle("user:create", (_, payload: CreateUserPayload) => {
     );
   }
   return result;
+});
+
+ipcMain.handle("user:update-profile", (_, payload: UpdateProfilePayload) => {
+  if (!payload.userId) {
+    return { success: false, message: "用户信息无效" };
+  }
+  const username = payload.displayName?.trim() || "";
+  if (username) {
+    const usernameError = validateUsername(username);
+    if (usernameError) {
+      return { success: false, message: usernameError };
+    }
+  }
+  if (payload.phone) {
+    const phoneError = validatePhone(payload.phone);
+    if (phoneError) {
+      return { success: false, message: phoneError };
+    }
+  }
+  if (payload.email) {
+    const emailError = validateEmail(payload.email);
+    if (emailError) {
+      return { success: false, message: emailError };
+    }
+  }
+  return updateProfile(db, payload);
 });
 
 ipcMain.handle("user:update-role", (_, payload: UpdateUserRolePayload) => {

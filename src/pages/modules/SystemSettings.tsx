@@ -302,7 +302,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     if (viewKey === "user") {
       loadUsers();
     }
-  }, [loadUsers, viewKey]);
+  }, [loadUsers, viewKey, currentUser]);
 
   useEffect(() => {
     if (viewKey === "backup") {
@@ -820,15 +820,26 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     }
   }, [loadAdminEmailStatus, loadMailSettings, viewKey]);
 
-  const handleAvatarChange = (info: { file: UploadFile; fileList: UploadFile[] }) => {
-    setAvatarFiles(info.fileList.slice(-1));
-    if (!info.file.originFileObj) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      userForm.setFieldsValue({ avatarUrl: typeof result === "string" ? result : undefined });
-    };
-    reader.readAsDataURL(info.file.originFileObj);
+  const handleAvatarChange = ({ fileList }: { fileList: UploadFile[] }) => {
+    const newFileList = fileList.slice(-1);
+    setAvatarFiles(newFileList);
+
+    if (newFileList.length > 0) {
+      const file = newFileList[0];
+      if (file.originFileObj) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file.originFileObj);
+        reader.onload = () => {
+          userForm.setFieldsValue({
+            avatarUrl: reader.result as string,
+          });
+        };
+      }
+    } else {
+      userForm.setFieldsValue({
+        avatarUrl: "",
+      });
+    }
   };
 
   const openRoleModal = (record: UserRow) => {
@@ -1868,7 +1879,10 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
           <Form.Item label="头像预览">
             <Avatar size={64} src={userAvatarUrl} icon={<UserOutlined />} />
           </Form.Item>
-          <Form.Item name="avatarUrl" label="上传头像">
+          <Form.Item name="avatarUrl" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item label="上传头像">
             <Upload
               accept="image/png,image/jpeg,image/webp"
               maxCount={1}

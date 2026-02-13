@@ -859,3 +859,41 @@ export const revealRecoveryKey = (
     recoveryKey: decryptRecoveryKey(row.cipher, row.iv, row.tag, secret),
   };
 };
+
+export type UpdateProfilePayload = {
+  userId: string;
+  displayName?: string;
+  phone?: string;
+  email?: string;
+  avatarUrl?: string;
+};
+
+export const updateProfile = (
+  db: DatabaseInstance,
+  payload: UpdateProfilePayload,
+): ActionResult => {
+  const { userId, displayName, phone, email, avatarUrl } = payload;
+  const row = db
+    .prepare("SELECT id FROM users WHERE id = ?")
+    .get(userId) as { id: string } | undefined;
+  if (!row) {
+    return { success: false, message: "用户不存在" };
+  }
+  const now = new Date().toISOString();
+  db.prepare(
+    `
+      UPDATE users
+      SET display_name = ?, phone = ?, email = ?, avatar_url = ?, updated_at = ?
+      WHERE id = ?
+    `,
+  ).run(
+    displayName?.trim() || null,
+    phone?.trim() || null,
+    email?.trim() || null,
+    avatarUrl || null,
+    now,
+    userId,
+  );
+  return { success: true, message: "个人资料已更新" };
+};
+
