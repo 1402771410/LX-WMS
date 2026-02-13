@@ -134,6 +134,7 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
   const [passwordForm] = Form.useForm<PasswordValues>();
   const avatarUrl = Form.useWatch("avatarUrl", profileForm);
   const displayAvatar = avatarUrl || currentUser?.avatarUrl;
+  const [profileAvatarFiles, setProfileAvatarFiles] = useState<UploadFile[]>([]);
   const [complianceOpen, setComplianceOpen] = useState(false);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [mailConfigured, setMailConfigured] = useState(true);
@@ -348,16 +349,30 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
       messageApi.error("请先登录");
       return;
     }
+    const nextAvatarUrl = currentUser.avatarUrl ?? "";
     profileForm.setFieldsValue({
       displayName: currentUser.displayName ?? "",
       phone: currentUser.phone ?? "",
       email: currentUser.email ?? "",
-      avatarUrl: currentUser.avatarUrl ?? "",
+      avatarUrl: nextAvatarUrl,
     });
+    setProfileAvatarFiles(
+      nextAvatarUrl
+        ? [
+            {
+              uid: "profile-avatar",
+              name: "avatar",
+              status: "done",
+              url: nextAvatarUrl,
+            },
+          ]
+        : [],
+    );
     setProfileOpen(true);
   };
 
-  const handleProfileAvatarChange = (info: { file: UploadFile }) => {
+  const handleProfileAvatarChange = (info: { file: UploadFile; fileList: UploadFile[] }) => {
+    setProfileAvatarFiles(info.fileList.slice(-1));
     if (!info.file.originFileObj) return;
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -606,11 +621,16 @@ const MainLayout = ({ currentUser, onLogout, onUpdateProfile }: MainLayoutProps)
               label: "基本信息",
               children: (
                 <Form form={profileForm} layout="vertical" requiredMark={false}>
+                  <Form.Item label="头像预览">
+                    <Avatar size={64} src={displayAvatar} icon={<UserOutlined />} />
+                  </Form.Item>
                   <Form.Item name="avatarUrl" label="头像上传">
                     <Upload
                       accept="image/png,image/jpeg,image/webp"
                       maxCount={1}
                       beforeUpload={() => false}
+                      listType="picture-card"
+                      fileList={profileAvatarFiles}
                       onChange={handleProfileAvatarChange}
                     >
                       <Button>选择图片</Button>

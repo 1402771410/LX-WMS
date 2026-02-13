@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { UserOutlined } from "@ant-design/icons";
 import {
   Avatar,
   Button,
@@ -20,6 +21,7 @@ import {
 } from "antd";
 import type { UploadFile } from "antd";
 import type { UserInfo } from "../../types/runtime";
+import { sanitizeReleaseNote } from "../../utils/text";
 import {
   type BackupSettings,
   type PermissionRule,
@@ -239,6 +241,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [recoveryResetForm] = Form.useForm<ChangePasswordWithRecoveryValues>();
   const [recoveryForm] = Form.useForm<RevealRecoveryValues>();
   const [avatarFiles, setAvatarFiles] = useState<UploadFile[]>([]);
+  const userAvatarUrl = Form.useWatch("avatarUrl", userForm);
   const autoBackupTimerRef = useRef<number | null>(null);
 
   const viewKey = activeKey ?? "company";
@@ -700,13 +703,13 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
           }
           return [];
         })
-        .map((text) => text.trim())
+        .map((text) => sanitizeReleaseNote(String(text)))
         .filter(Boolean);
     }
     if (typeof raw === "string") {
       return raw
         .split(/\r?\n/)
-        .map((text) => text.trim())
+        .map((text) => sanitizeReleaseNote(text))
         .filter(Boolean);
     }
     return [];
@@ -1739,14 +1742,15 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
         cancelText="取消"
       >
         <Form form={userForm} layout="vertical" requiredMark={false}>
-          <Form.Item
-            name="avatarUrl"
-            label="上传头像"
-          >
+          <Form.Item label="头像预览">
+            <Avatar size={64} src={userAvatarUrl} icon={<UserOutlined />} />
+          </Form.Item>
+          <Form.Item name="avatarUrl" label="上传头像">
             <Upload
               accept="image/png,image/jpeg,image/webp"
               maxCount={1}
               beforeUpload={() => false}
+              listType="picture-card"
               fileList={avatarFiles}
               onChange={handleAvatarChange}
             >

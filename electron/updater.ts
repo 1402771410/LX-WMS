@@ -4,7 +4,15 @@ import type { UpdateCheckResult } from "electron-updater";
 
 const { autoUpdater } = updater;
 
+const updateFeedUrl =
+  "https://mirror.ghproxy.com/https://github.com/1402771410/LX-WMS/releases/latest/download/";
+
+const applyUpdateFeed = () => {
+  autoUpdater.setFeedURL({ provider: "generic", url: updateFeedUrl });
+};
+
 export const setupAutoUpdater = (mainWindow: BrowserWindow): void => {
+  applyUpdateFeed();
   autoUpdater.autoDownload = false;
 
   autoUpdater.on("update-available", async (info) => {
@@ -38,6 +46,7 @@ export const setupAutoUpdater = (mainWindow: BrowserWindow): void => {
 
 export const checkForUpdates = async (): Promise<UpdateCheckResult | null> => {
   try {
+    applyUpdateFeed();
     const result = await autoUpdater.checkForUpdates();
     return result ?? null;
   } catch {
