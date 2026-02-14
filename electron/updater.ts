@@ -4,11 +4,12 @@ import type { UpdateCheckResult } from "electron-updater";
 
 const { autoUpdater } = updater;
 
-const updateFeedUrl =
-  "https://github.com/1402771410/LX-WMS/releases/latest/download/";
-
 const applyUpdateFeed = () => {
-  autoUpdater.setFeedURL({ provider: "generic", url: updateFeedUrl });
+  autoUpdater.setFeedURL({
+    provider: "github",
+    owner: "1402771410",
+    repo: "LX-WMS",
+  });
 };
 
 export const setupAutoUpdater = (mainWindow: BrowserWindow): void => {
