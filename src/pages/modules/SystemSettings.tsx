@@ -811,6 +811,8 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     return "https://github.com/1402771410/LX-WMS/releases/latest";
   }, []);
 
+  const panUrl = "https://pan.baidu.com/s/1jpcPKbxlDIU9cZi_sO6RLA?pwd=8888";
+
   const formatBytes = useCallback((value?: number) => {
     if (!value || value <= 0) return "0 B";
     const units = ["B", "KB", "MB", "GB"];
@@ -1830,6 +1832,14 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
           {downloadError ? (
             <Space direction="vertical" style={{ width: "100%" }}>
               <Typography.Text type="danger">下载失败：{downloadError}</Typography.Text>
+              <Typography.Text type="warning" style={{ display: "block", marginTop: 8 }}>
+                由于国内网络环境问题您可能无法连接到 GitHub 进行在线更新。
+                <br />
+                国内用户可点击自行进入百度网盘查看新版本：
+                <Button type="link" onClick={() => handleOpenGuide(panUrl)} style={{ padding: 0 }}>
+                  点我跳转
+                </Button>
+              </Typography.Text>
               <Typography.Text>手动更新教程：</Typography.Text>
               <Typography.Text>1. 点击下方下载地址获取最新安装包</Typography.Text>
               <Typography.Text>2. 关闭当前应用后双击安装包完成升级</Typography.Text>
@@ -1855,7 +1865,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
                   ))}
                 </Space>
               ) : (
-                <Typography.Text>更新内容：暂无</Typography.Text>
+                <Typography.Text>更新内容：{updateInfo.releaseNotes ? String(updateInfo.releaseNotes) : "暂无"}</Typography.Text>
               )}
             </Space>
           ) : (
