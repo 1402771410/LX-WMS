@@ -229,7 +229,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [downloadRetryCount, setDownloadRetryCount] = useState(0);
 
   useEffect(() => {
-    if (downloadRetryCount > 0 && downloadRetryCount <= 2) {
+    if (downloadRetryCount > 0 && downloadRetryCount <= 3) {
       const timer = setTimeout(() => {
         window.api?.downloadUpdate();
       }, 1000);
@@ -747,7 +747,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     });
     const offError = window.api.onUpdateError((payload) => {
       setDownloadRetryCount((prev) => {
-        if (prev >= 2) {
+        if (prev >= 3) {
           setDownloadingUpdate(false);
           setDownloadError(payload.message ?? "下载失败");
         }
@@ -803,12 +803,8 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   }, [updateInfo]);
 
   const manualDownloadUrl = useMemo(() => {
-    const version = updateInfo?.version?.trim();
-    if (version) {
-      return `https://mirror.ghproxy.com/https://github.com/1402771410/LX-WMS/releases/latest/download/LX-WMS-Setup-${version}.exe`;
-    }
     return "https://github.com/1402771410/LX-WMS/releases/latest";
-  }, [updateInfo?.version]);
+  }, []);
 
   const formatBytes = useCallback((value?: number) => {
     if (!value || value <= 0) return "0 B";
