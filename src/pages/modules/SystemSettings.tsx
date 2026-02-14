@@ -227,6 +227,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
   const [downloadedUpdate, setDownloadedUpdate] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadRetryCount, setDownloadRetryCount] = useState(0);
+  const isDownloadingRef = useRef(false);
 
   useEffect(() => {
     if (downloadRetryCount > 0 && downloadRetryCount <= 3) {
@@ -495,6 +496,7 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
     setDownloadError(null);
     setDownloadProgress(null);
     setDownloadRetryCount(0);
+    isDownloadingRef.current = true;
     const result = await window.api.downloadUpdate();
     if (result.success) {
       messageApi.success(result.message ?? "已开始下载更新");
@@ -742,12 +744,15 @@ const SystemSettings = ({ activeKey, currentUser }: SystemSettingsProps) => {
       setDownloadedUpdate(false);
     });
     const offDownloaded = window.api.onUpdateDownloaded(() => {
+      isDownloadingRef.current = false;
       setDownloadingUpdate(false);
       setDownloadedUpdate(true);
     });
     const offError = window.api.onUpdateError((payload) => {
+      if (!isDownloadingRef.current) return;
       setDownloadRetryCount((prev) => {
         if (prev >= 3) {
+          isDownloadingRef.current = false;
           setDownloadingUpdate(false);
           setDownloadError(payload.message ?? "下载失败");
         }
