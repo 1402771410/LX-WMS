@@ -319,6 +319,19 @@ const validatePhone = (phone: string): string | null => {
   return ok ? null : "电话需为 6-20 位数字";
 };
 
+const compareVersions = (v1: string, v2: string): number => {
+  const parts1 = v1.split(".").map(Number);
+  const parts2 = v2.split(".").map(Number);
+  const len = Math.max(parts1.length, parts2.length);
+  for (let i = 0; i < len; i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 > p2) return 1;
+    if (p1 < p2) return -1;
+  }
+  return 0;
+};
+
 const backupDir = path.join(app.getPath("userData"), "backups");
 const ensureBackupDir = () => {
   if (!fs.existsSync(backupDir)) {
@@ -844,11 +857,9 @@ ipcMain.handle("update:check", async () => {
     }
     const info = result.updateInfo;
     const currentVersion = app.getVersion();
-    // 简单的版本比较逻辑：如果远程版本不等于当前版本，且不是旧版本
-    // electron-updater 内部其实已经做了比较，但为了防止它在 dev 模式下行为不一致
-    // 我们强制要求：只有当远程版本号字符串不等于本地版本号时，才认为有更新
-    // 注意：这里假设版本号是严格递增的。如果回退版本，这里也会提示更新（符合预期）
-    const isNewer = info.version !== currentVersion;
+    // 严格版本比较：只有当远程版本 > 本地版本时，才认为有更新
+    // 且不允许版本回退（即远程版本 <= 本地版本时，available 为 false）
+    const isNewer = compareVersions(info.version, currentVersion) > 0;
 
     return {
       available: isNewer,
