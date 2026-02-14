@@ -266,6 +266,10 @@ const sendMail = async (
       user: config.user,
       pass: config.pass,
     },
+    tls: {
+      rejectUnauthorized: false,
+      servername: config.host,
+    },
   });
   try {
     await transporter.sendMail({
