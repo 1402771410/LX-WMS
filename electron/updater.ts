@@ -5,7 +5,7 @@ import type { UpdateCheckResult } from "electron-updater";
 const { autoUpdater } = updater;
 
 const updateFeedUrl =
-  "https://mirror.ghproxy.com/https://github.com/1402771410/LX-WMS/releases/latest/download/";
+  "https://github.com/1402771410/LX-WMS/releases/latest/download/";
 
 const applyUpdateFeed = () => {
   autoUpdater.setFeedURL({ provider: "generic", url: updateFeedUrl });
